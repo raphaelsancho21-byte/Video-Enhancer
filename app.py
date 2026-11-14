@@ -19,7 +19,8 @@ ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data"
 UPLOADS = DATA / "uploads"
 OUTPUTS = DATA / "outputs"
-for directory in (UPLOADS, OUTPUTS):
+AUDIO = DATA / "audio"
+for directory in (UPLOADS, OUTPUTS, AUDIO):
     directory.mkdir(parents=True, exist_ok=True)
 
 MAX_BYTES = 1024 * 1024 * 1024
@@ -217,17 +218,19 @@ def probe_audio(path: Path) -> bool:
 
 
 def process_edit(job_id: str, source: Path, destination: Path, segments: list[dict],
-                 quality: str, resolution: str, fps: str, muted: bool):
+                 quality: str, resolution: str, fps: str, muted: bool,
+                 composition: dict | None = None, extracted_audio: dict | None = None):
     with PROCESS_LOCK:
         with JOBS_LOCK:
             JOBS[job_id].update(status="processing", stage="Renderizando edição")
         try:
             duration = max((c.get("at", 0) + (c["end"] - c["start"]) / c["speed"] for c in segments), default=0)
-            has_audio = probe_audio(source) and not muted
+            separate_audio = bool(extracted_audio and not muted)
+            has_audio = probe_audio(source) and not muted and not separate_audio
             import math
             meta = probe_video(source)
-            comp_w = int(meta["width"]) // 2 * 2
-            comp_h = int(meta["height"]) // 2 * 2
+            comp_w = int(composition["width"]) if composition else int(meta["width"]) // 2 * 2
+            comp_h = int(composition["height"]) if composition else int(meta["height"]) // 2 * 2
             rate = subprocess.run(
                 [find_binary("ffprobe"), "-v", "error", "-select_streams", "v:0",
                  "-show_entries", "stream=avg_frame_rate", "-of", "default=nokey=1:noprint_wrappers=1", str(source)],
@@ -264,14 +267,21 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
                          f"fps={base_fps:.4f},setsar=1")
                 t = c.get("transform")
                 identity = (
-                    not t or
+                    comp_w == int(meta["width"]) and comp_h == int(meta["height"]) and
+                    (not t or
                     (abs(t["x"] - meta["width"] / 2) < 0.01
                      and abs(t["y"] - meta["height"] / 2) < 0.01
                      and abs(t["width"] - meta["width"]) < 0.01
                      and abs(t["height"] - meta["height"]) < 0.01
-                     and abs(t["rotation"] % 360) < 0.00001)
-                )
+                     and abs(t["rotation"] % 360) < 0.00001))
+                
                 if not identity:
+                    if not t:
+                        # Legacy clip with no transform: contain within the composition.
+                        factor = min(comp_w / meta["width"], comp_h / meta["height"])
+                        tw, th = meta["width"] * factor, meta["height"] * factor
+                        t = {"width": tw, "height": th, "x": comp_w/2,
+                             "y": comp_h/2, "rotation": 0}
                     w = max(2, int(round(t["width"] / 2) * 2))
                     h = max(2, int(round(t["height"] / 2) * 2))
                     angle = (t["rotation"] % 360) * math.pi / 180
@@ -309,6 +319,27 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
                    "-map", video_map]
             if has_audio:
                 cmd += ["-map", "[aout]"]
+            if separate_audio:
+                # Audio is a distinct media track with an independent timeline start.
+                audio_path = AUDIO / (extracted_audio["id"] + ".mp3")
+                if not audio_path.is_file():
+                    raise RuntimeError("Áudio extraído ausente. Extraia novamente antes de exportar.")
+                offset = float(extracted_audio["at"])
+                volume = float(extracted_audio["volume"])
+                # Add input, then mix a delayed/trimmed audio track to the video end.
+                # Zero-based input #1 refers to the extracted audio, not the source.
+                cmd += ["-i", str(audio_path)]
+                audio_graph = (f"[1:a:0]atrim=duration={max(0.,duration-offset):.6f},"
+                               f"asetpts=PTS-STARTPTS,volume={volume:.4f},"
+                               f"adelay={int(round(offset*1000))}:all=1,"
+                               f"apad=whole_dur={duration:.6f},"
+                               f"atrim=duration={duration:.6f}[external_audio]")
+                # Extend the existing filtergraph to produce one synchronized output.
+                graph.append(audio_graph)
+                cmd = [find_binary("ffmpeg"), "-hide_banner", "-nostdin", "-y",
+                       "-i", str(source), "-i", str(audio_path),
+                       "-filter_complex", ";".join(graph), "-map", video_map,
+                       "-map", "[external_audio]"]
             cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "19",
                     "-pix_fmt", "yuv420p"]
             if has_audio:
@@ -352,7 +383,8 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
 @app.post("/api/editor/export", status_code=202)
 async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
                         quality: str = Form("balanced"), resolution: str = Form("1080"),
-                        fps: str = Form("original"), mute: bool = Form(False)):
+                        fps: str = Form("original"), mute: bool = Form(False),
+                        composition: str = Form("null"), extracted_audio: str = Form("null")):
     import math
     if quality not in {"off", "balanced", "strong"} or resolution not in {"original", "720", "1080", "2160"} or fps not in {"original", "60"}:
         raise HTTPException(400, "Configuração inválida")
@@ -365,6 +397,25 @@ async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
     except RuntimeError as exc:
         raise HTTPException(503, str(exc)) from exc
     try:
+        comp = json.loads(composition)
+        if comp is not None:
+            if not isinstance(comp, dict):
+                raise ValueError("Composição inválida")
+            cw, ch = int(comp["width"]), int(comp["height"])
+            if not (64 <= cw <= 4096 and 64 <= ch <= 4096 and cw % 2 == 0 and ch % 2 == 0):
+                raise ValueError("Composição deve ter dimensões pares de 64 a 4096")
+            comp = {"width": cw, "height": ch}
+        audio_setting = json.loads(extracted_audio)
+        if audio_setting is not None:
+            if not isinstance(audio_setting, dict) or not isinstance(audio_setting.get("id"), str):
+                raise ValueError("Faixa de áudio inválida")
+            aid = audio_setting["id"]
+            if len(aid) != 32 or not all(ch in "0123456789abcdef" for ch in aid):
+                raise ValueError("ID de áudio inválido")
+            audio_at, audio_volume = float(audio_setting.get("at", 0)), float(audio_setting.get("volume", 1))
+            if not (0 <= audio_at <= 24*3600 and 0 <= audio_volume <= 2):
+                raise ValueError("Posição ou volume de áudio inválido")
+            audio_setting = {"id": aid, "at": audio_at, "volume": audio_volume}
         segments = json.loads(clips)
         if not isinstance(segments, list) or not 1 <= len(segments) <= 100:
             raise ValueError("Use entre 1 e 100 trechos")
@@ -422,10 +473,75 @@ async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
         JOBS[job_id] = {"id": job_id, "status": "queued", "stage": "Aguardando exportação",
                         "progress": 0, "error": None, "download": None, "created": time.time()}
     threading.Thread(target=process_edit,
-                     args=(job_id, source, destination, segments, quality, resolution, fps, mute),
+                     args=(job_id, source, destination, segments, quality, resolution, fps, mute, comp, audio_setting),
                      daemon=True).start()
     return {"id": job_id}
 
+
+
+
+@app.post("/api/editor/extract-audio")
+async def extract_project_audio(file: UploadFile = File(...)):
+    """Extract audio to a project-local asset. Nothing is downloaded to the browser."""
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_EXT:
+        raise HTTPException(400, "Formato de vídeo inválido")
+    try:
+        ffmpeg = find_binary("ffmpeg")
+        find_binary("ffprobe")
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    asset_id = uuid.uuid4().hex
+    input_path = UPLOADS / (asset_id + ext)
+    audio_path = AUDIO / (asset_id + ".mp3")
+    written = 0
+    try:
+        with input_path.open("wb") as out:
+            while chunk := await file.read(1024 * 1024):
+                written += len(chunk)
+                if written > MAX_BYTES:
+                    raise HTTPException(413, "Arquivo ultrapassa 1 GB")
+                out.write(chunk)
+        if not written or not await asyncio.to_thread(probe_audio, input_path):
+            raise HTTPException(400, "O vídeo não possui faixa de áudio")
+        def encode():
+            return subprocess.run(
+                [ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
+                 "-i", str(input_path), "-map", "0:a:0", "-vn", "-c:a", "libmp3lame",
+                 "-b:a", "160k", str(audio_path)],
+                capture_output=True, text=True, timeout=1800)
+        result = await asyncio.to_thread(encode)
+        if result.returncode or not audio_path.is_file():
+            raise HTTPException(500, "Erro extraindo áudio: " + result.stderr[-600:])
+        return {"id": asset_id, "url": f"/api/editor/audio/{asset_id}",
+                "size": audio_path.stat().st_size, "name": (file.filename or "video") + " • áudio"}
+    except Exception:
+        audio_path.unlink(missing_ok=True)
+        raise
+    finally:
+        await file.close()
+        input_path.unlink(missing_ok=True)
+
+
+@app.get("/api/editor/audio/{asset_id}")
+def get_project_audio(asset_id: str):
+    if len(asset_id) != 32 or not all(ch in "0123456789abcdef" for ch in asset_id):
+        raise HTTPException(404, "Faixa não encontrada")
+    path = AUDIO / (asset_id + ".mp3")
+    if not path.is_file():
+        raise HTTPException(404, "Áudio não encontrado (extraia novamente)")
+    return FileResponse(path, media_type="audio/mpeg")
+
+
+@app.post("/api/editor/audio/{asset_id}/beats")
+async def detect_project_audio_beats(asset_id: str):
+    from beat_detection import detect_beats
+    if len(asset_id) != 32 or not all(ch in "0123456789abcdef" for ch in asset_id):
+        raise HTTPException(404, "Faixa inválida")
+    path = AUDIO / (asset_id + ".mp3")
+    if not path.is_file():
+        raise HTTPException(404, "Faixa não encontrada")
+    return await asyncio.to_thread(detect_beats, path, find_binary("ffmpeg"))
 
 
 @app.post("/api/editor/beats")
