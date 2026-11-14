@@ -31,6 +31,10 @@ PROCESS_LOCK = threading.Lock()
 app = FastAPI(title="Video Enhancer", version="1.0.0")
 app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 
+import tiktok_integration
+tiktok_integration.configure(JOBS, JOBS_LOCK, OUTPUTS)
+app.include_router(tiktok_integration.router)
+
 
 def find_binary(name: str) -> str:
     found = shutil.which(name)
@@ -220,7 +224,7 @@ def probe_audio(path: Path) -> bool:
 def process_edit(job_id: str, source: Path, destination: Path, segments: list[dict],
                  quality: str, resolution: str, fps: str, muted: bool,
                  composition: dict | None = None, extracted_audio: dict | None = None,
-                 export_mode: str = "fast"):
+                 export_mode: str = "fast", platform_preset: str = "none"):
     with PROCESS_LOCK:
         with JOBS_LOCK:
             JOBS[job_id].update(status="processing", stage="Renderizando edição")
@@ -348,12 +352,18 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
                        "-i", str(source), "-i", str(audio_path),
                        "-filter_complex", ";".join(graph), "-map", video_map,
                        "-map", "[external_audio]"]
-            codec_preset = "ultrafast" if export_mode == "fast" else "veryfast"
-            codec_crf = "21" if export_mode == "fast" else "19"
+            codec_preset = "veryfast" if platform_preset == "tiktok_hq" else ("ultrafast" if export_mode == "fast" else "veryfast")
+            codec_crf = "19" if platform_preset == "tiktok_hq" else ("21" if export_mode == "fast" else "19")
             cmd += ["-c:v", "libx264", "-preset", codec_preset, "-crf", codec_crf,
                     "-threads", "2" if export_mode == "fast" else "0", "-pix_fmt", "yuv420p"]
+            if platform_preset == "tiktok_hq":
+                # High-quality capped CRF, suitable for upload without huge files.
+                limit = "16M" if fps == "60" else "10M"
+                buffer = "32M" if fps == "60" else "20M"
+                cmd += ["-profile:v", "high", "-maxrate", limit, "-bufsize", buffer,
+                        "-g", "120" if fps == "60" else "60"]
             if has_audio or separate_audio:
-                cmd += ["-c:a", "aac", "-b:a", "192k"]
+                cmd += ["-c:a", "aac", "-b:a", "192k" if platform_preset == "tiktok_hq" else "192k"]
             cmd += ["-movflags", "+faststart", "-progress", "pipe:1", "-nostats",
                     str(destination)]
             with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -395,8 +405,10 @@ async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
                         quality: str = Form("balanced"), resolution: str = Form("1080"),
                         fps: str = Form("original"), mute: bool = Form(False),
                         composition: str = Form("null"), extracted_audio: str = Form("null"),
-                        export_mode: str = Form("fast")):
+                        export_mode: str = Form("fast"), platform_preset: str = Form("none")):
     import math
+    if platform_preset not in {"none", "tiktok_hq"}:
+        raise HTTPException(400, "Preset de exportação inválido")
     if export_mode not in {"fast", "quality"}:
         raise HTTPException(400, "Modo de exportação inválido")
     if quality not in {"off", "balanced", "strong"} or resolution not in {"original", "720", "1080", "2160"} or fps not in {"original", "60"}:
@@ -489,7 +501,7 @@ async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
         JOBS[job_id] = {"id": job_id, "status": "queued", "stage": "Aguardando exportação",
                         "progress": 0, "error": None, "download": None, "created": time.time()}
     threading.Thread(target=process_edit,
-                     args=(job_id, source, destination, segments, quality, resolution, fps, mute, comp, audio_setting, export_mode),
+                     args=(job_id, source, destination, segments, quality, resolution, fps, mute, comp, audio_setting, export_mode, platform_preset),
                      daemon=True).start()
     return {"id": job_id}
 
