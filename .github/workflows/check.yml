@@ -3,11 +3,21 @@ on:
   push:
   pull_request:
 jobs:
-  syntax:
+  syntax-and-render:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m compileall -q app.py
+      - name: Python syntax
+        run: python -m compileall -q app.py beat_detection.py tests
+      - name: JavaScript syntax
+        run: |
+          for file in static/*.js; do node --check "$file"; done
+      - name: Setup dependencies
+        run: |
+          pip install -r requirements.txt
+          ffmpeg -version
+      - name: FFmpeg export smoke test
+        run: python tests/test_smoke.py
