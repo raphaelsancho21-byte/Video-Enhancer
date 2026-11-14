@@ -229,6 +229,6 @@ async function makeThumbnails(url){
  }finally{probe.pause();probe.removeAttribute('src');probe.load()}
  return frames;
 }
-window.VideoEnhancerTimelineBridge={clips:()=>clips,cursor:()=>cursor,total,seek,render,snapshot,sourceDuration:()=>sourceDuration,file:()=>file, fps:()=>Number($('projectFps')?.value||30),playing:()=>playing,select:i=>{selected=i;for(const el of $('clips').children)el.classList.toggle('selected',Number(el.dataset.index)===i)}};
+window.VideoEnhancerTimelineBridge={clips:()=>clips,cursor:()=>cursor,total,seek,render,snapshot,sourceDuration:()=>sourceDuration,file:()=>file, fps:()=>Number($('projectFps')?.value||30),playing:()=>playing,refreshComposition:()=>{currentCanvasClip=-1;syncVideo(true)},select:i=>{selected=i;for(const el of $('clips').children)el.classList.toggle('selected',Number(el.dataset.index)===i)}};
 window.addEventListener('resize',render);render();
 })();
