@@ -74,3 +74,11 @@ html,body{height:100%;width:100%;overflow:hidden}
 .timeline-stage.has-audio .playhead{height:201px}
 .audio-track-body{margin-right:0}
 @media(max-width:650px){.composition-size{grid-template-columns:1fr 1fr}.audio-track-controls{gap:4px}}
+
+/* TikTok HQ export and official inbox connector */
+.tiktok-share{border-top:1px solid #3a4255;margin-top:21px;padding-top:13px}
+.tiktok-share .property-label{margin:0 0 8px}
+.tiktok-share p{overflow-wrap:anywhere}
+.tiktok-share>.accent{display:block;width:100%;margin:12px 0;padding:11px}
+.tiktok-share .buttonrow{margin:11px 0}
+.tiktok-share .buttonrow button{min-width:0}
