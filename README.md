@@ -49,3 +49,14 @@ requirements.txt
 
 ## Desenvolvimento
 Execute `python -m compileall -q app.py` para conferir a sintaxe Python. Projeto MIT.
+
+
+## Editor de vídeo (V1.1)
+Abra **http://127.0.0.1:8000/editor** para editar um vídeo com uma timeline.
+
+- Importar um vídeo, reproduzir e navegar na timeline
+- Dividir trechos (tecla S), aparar início/fim arrastando as bordas, modificar tempos e velocidade
+- Duplicar, excluir, reordenar trechos e desfazer alterações (Ctrl+Z)
+- Exportar para MP4 com corte, velocidade, áudio opcional, resolução, melhoria e 60 FPS
+
+**Limites atuais:** só um arquivo de mídia por projeto, sem trilhas de música, texto, stickers, transições ou efeitos avançados. O editor usa um único vídeo original para todos os segmentos. A prévia usa o player HTML5 e pode não suportar alguns formatos que o FFmpeg aceita. A exportação requer FFmpeg e o servidor local ativo. Ainda não há salvamento persistente de projetos.
