@@ -393,6 +393,35 @@ async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
     return {"id": job_id}
 
 
+
+@app.post("/api/editor/beats")
+async def analyze_beats(file: UploadFile = File(...)):
+    """Opt-in beat analysis: streamed upload, FFmpeg child, bounded memory."""
+    from beat_detection import detect_beats
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_EXT | {".mp3", ".wav", ".ogg", ".m4a", ".aac", ".flac"}:
+        raise HTTPException(400, "Formato de áudio ou vídeo inválido")
+    try:
+        ffmpeg = find_binary("ffmpeg")
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    path = UPLOADS / (uuid.uuid4().hex + ext)
+    size = 0
+    try:
+        with path.open("wb") as out:
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+                if size > MAX_BYTES:
+                    raise HTTPException(413, "Arquivo acima de 1 GB")
+                out.write(chunk)
+        if not size:
+            raise HTTPException(400, "Arquivo vazio")
+        return await asyncio.to_thread(detect_beats, path, ffmpeg)
+    finally:
+        await file.close()
+        path.unlink(missing_ok=True)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
