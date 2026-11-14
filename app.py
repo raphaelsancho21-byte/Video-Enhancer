@@ -224,7 +224,8 @@ def probe_audio(path: Path) -> bool:
 def process_edit(job_id: str, source: Path, destination: Path, segments: list[dict],
                  quality: str, resolution: str, fps: str, muted: bool,
                  composition: dict | None = None, extracted_audio: dict | None = None,
-                 export_mode: str = "fast", platform_preset: str = "none"):
+                 export_mode: str = "fast", platform_preset: str = "none",
+                 motion_blur: str = "off"):
     with PROCESS_LOCK:
         with JOBS_LOCK:
             JOBS[job_id].update(status="processing", stage="Renderizando edição")
@@ -302,13 +303,29 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
                     y = t["y"] - comp_h / 2
                     graph.append(f"[background{i}][foreground{i}]overlay=x=(W-w)/2+({x:.5f}):y=(H-h)/2+({y:.5f}):shortest=1:format=auto,format=yuv420p[v{i}]")
                 else:
-                    graph.append(chain + f",format=yuv420p[v{i}]")
+                    graph.append(chain + f",format=yuv420p[vraw{i}]")
+                # Temporal blur is rendered separately PER CLIP, so frames from
+                # different cuts never bleed/ghost across an edit boundary.
+                if motion_blur == "off":
+                    if t and not identity:
+                        # The transformed output is already named v{i}.
+                        graph.append(f"[v{i}]null[vready{i}]")
+                    else:
+                        graph.append(f"[vraw{i}]null[vready{i}]")
+                else:
+                    mix = {
+                        "light": "tmix=frames=2:weights=1 1",
+                        "medium": "tmix=frames=3:weights=1 2 1",
+                        "strong": "tmix=frames=5:weights=1 2 3 2 1",
+                    }[motion_blur]
+                    source_label = f"v{i}" if t and not identity else f"vraw{i}"
+                    graph.append(f"[{source_label}]{mix},format=yuv420p[vready{i}]")
                 if has_audio:
                     graph.append(
                         f"[0:a:0]atrim=start={start:.5f}:end={end:.5f},"
                         f"asetpts=PTS-STARTPTS,atempo={speed:.5f},"
                         f"aresample=async=1:first_pts=0[a{i}]")
-                rendered.append((f"v{i}", f"a{i}" if has_audio else None))
+                rendered.append((f"vready{i}", f"a{i}" if has_audio else None))
             if has_audio:
                 inputs = "".join(f"[{v}][{a}]" for v, a in rendered)
                 graph.append(f"{inputs}concat=n={len(rendered)}:v=1:a=1[vcat][aout]")
@@ -405,8 +422,11 @@ async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
                         quality: str = Form("balanced"), resolution: str = Form("1080"),
                         fps: str = Form("original"), mute: bool = Form(False),
                         composition: str = Form("null"), extracted_audio: str = Form("null"),
-                        export_mode: str = Form("fast"), platform_preset: str = Form("none")):
+                        export_mode: str = Form("fast"), platform_preset: str = Form("none"),
+                        motion_blur: str = Form("off")):
     import math
+    if motion_blur not in {"off", "light", "medium", "strong"}:
+        raise HTTPException(400, "Intensidade de Motion Blur inválida")
     if platform_preset not in {"none", "tiktok_hq"}:
         raise HTTPException(400, "Preset de exportação inválido")
     if export_mode not in {"fast", "quality"}:
@@ -501,7 +521,7 @@ async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
         JOBS[job_id] = {"id": job_id, "status": "queued", "stage": "Aguardando exportação",
                         "progress": 0, "error": None, "download": None, "created": time.time()}
     threading.Thread(target=process_edit,
-                     args=(job_id, source, destination, segments, quality, resolution, fps, mute, comp, audio_setting, export_mode, platform_preset),
+                     args=(job_id, source, destination, segments, quality, resolution, fps, mute, comp, audio_setting, export_mode, platform_preset, motion_blur),
                      daemon=True).start()
     return {"id": job_id}
 
