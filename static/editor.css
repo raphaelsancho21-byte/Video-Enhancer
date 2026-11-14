@@ -54,3 +54,23 @@ html,body{height:100%;width:100%;overflow:hidden}
 .timeline-snap-guide{position:absolute;top:25px;bottom:0;border-left:1px solid #34e5e2;z-index:6;pointer-events:none;box-shadow:0 0 6px #3ce8dd}
 .beat-button{display:block;width:100%;margin-top:10px;background:#283650;border:1px solid #405677;border-radius:7px;padding:11px 8px;font-size:12px;color:#c0d5ff}
 .beat-button:disabled{opacity:.35}
+
+/* V1.4 composition and detached audio track */
+.composition-size{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.composition-size input{min-width:0}
+.audio-track{height:66px;display:flex;position:relative;align-items:stretch;margin-top:1px;z-index:2}
+.audio-track>.track-label{height:65px;padding:11px 12px;color:#78dbc9}
+.audio-track-body{position:relative;flex:1;min-width:0;height:60px;background:#102127;border-top:1px solid #274e48;border-bottom:1px solid #274e48}
+.audio-clip{position:absolute;left:0;top:4px;height:52px;overflow:hidden;border:1px solid #419b8c;border-radius:5px;background:linear-gradient(110deg,#194f48,#1d6159);cursor:grab;touch-action:none;user-select:none}
+.audio-clip:active{cursor:grabbing}
+.audio-clip span{position:absolute;top:5px;left:12px;font-size:10px;color:#ddfff3;pointer-events:none}
+.audio-clip canvas{position:absolute;bottom:1px;left:0;max-height:30px;pointer-events:none;opacity:.8}
+.audio-track-controls{position:absolute;left:92px;bottom:2px;display:flex;gap:9px;align-items:center;background:#101c1bd9;padding:2px 5px;border-radius:4px}
+.audio-track-controls button{border:0;background:#26554b;padding:2px 8px;border-radius:4px;color:#ccfce8}
+.audio-track-controls button.muted{background:#61454c;color:#ffcaca}
+.audio-track-controls label{display:flex;align-items:center;gap:4px;color:#b3e3d1;font-size:9px}
+.audio-track-controls input{width:64px;accent-color:#58ceaf}
+.timeline-stage.has-audio{min-height:205px;height:205px}
+.timeline-stage.has-audio .playhead{height:201px}
+.audio-track-body{margin-right:0}
+@media(max-width:650px){.composition-size{grid-template-columns:1fr 1fr}.audio-track-controls{gap:4px}}
