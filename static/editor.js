@@ -5,7 +5,7 @@ const pixels = () => Number($('zoom').value);
 let file = null, sourceUrl = '', sourceDuration = 0, clips = [], selected = -1, cursor = 0, playing = false, editing = false, dragging = null, undo = [], redo = [], toastTimeout, thumbnails=[], pendingProject=null;
 const clamp = (x,a,b) => Math.max(a,Math.min(b,x));
 const dlen = c => (c.end-c.start)/c.speed;
-let currentCanvasClip=-1;
+let currentCanvasClip=-1,gapRaf=0,gapPrevious=0;
 const canvasApi=()=>window.VideoEnhancerCanvas;
 function refreshCanvasClip(index){if(index===currentCanvasClip)return;currentCanvasClip=index;const api=canvasApi();if(!api)return;if(index<0||!clips[index]){api.set(null);return}const c=clips[index];c.transform=api.ensure(c.transform);api.set(c.transform)}
 window.addEventListener('video-enhancer-canvas-change',e=>{const idx=currentCanvasClip;if(idx>=0&&clips[idx])clips[idx].transform={...e.detail}});
@@ -18,13 +18,45 @@ const timelineSnap = (value, points, radius=.12) => {const target=points.find(x=
 const locate = t => {const order=clips.map((c,index)=>({index,c,at:c.at||0})).sort((a,b)=>a.at-b.at);for(const item of order){const end=item.at+dlen(item.c);if(t>=item.at-1e-6&&t<end-1e-6)return {index:item.index,local:Math.max(0,t-item.at),at:item.at}}return null};
 function syncVideo(force=false) {
  const loc=locate(cursor);
- if(!loc){video.pause();playing=false;return}
+ if(!loc){video.pause();refreshCanvasClip(-1);return}
  const clip=clips[loc.index],pos=clip.start+loc.local*clip.speed;
  video.playbackRate=clip.speed;
  if(force || Math.abs(video.currentTime-pos)>.13) video.currentTime=pos;
  refreshCanvasClip(loc.index);
 }
-function seek(t,force=true){cursor=clamp(t,0,total());syncVideo(force);paintPlayhead()}
+function seek(t,force=true){
+ cursor=clamp(t,0,total());syncVideo(force);paintPlayhead();
+ if(playing){
+  if(locate(cursor)&&video.paused){stopGap();video.play().catch(()=>{playing=false;paintControl()})}
+  else if(!locate(cursor))startGap();
+ }
+}
+function stopGap(){if(gapRaf)cancelAnimationFrame(gapRaf);gapRaf=0;gapPrevious=0}
+function startGap(){
+ if(!playing||gapRaf)return;
+ video.pause();refreshCanvasClip(-1);gapPrevious=0;
+ function tick(now){
+  gapRaf=0;if(!playing||locate(cursor))return;
+  if(gapPrevious)cursor=clamp(cursor+(now-gapPrevious)/1000,0,total());
+  gapPrevious=now;paintPlayhead();
+  if(cursor>=total()-1e-5){playing=false;paintControl();stopGap();return}
+  if(locate(cursor)){syncVideo(true);video.play().catch(()=>{playing=false;paintControl()});return}
+  gapRaf=requestAnimationFrame(tick);
+ }
+ gapRaf=requestAnimationFrame(tick);
+}
+function finishClip(){
+ const loc=locate(cursor);
+ if(!loc){startGap();return}
+ const end=loc.at+dlen(clips[loc.index]);
+ cursor=end;
+ const next=clips.map((c,i)=>({i,at:c.at||0})).filter(x=>x.i!==loc.index&&x.at>=end-1e-4).sort((a,b)=>a.at-b.at)[0];
+ if(!next){playing=false;video.pause();cursor=total();stopGap();paintControl();paintPlayhead();return}
+ cursor=Math.max(end,next.at===end?next.at:end)+.00001;
+ if(locate(cursor)){syncVideo(true);video.play().catch(()=>{playing=false;paintControl()})}
+ else startGap();
+ paintPlayhead();
+}
 function paintPlayhead(){const x=90+cursor*pixels();$('playhead').style.left=x+'px';$('clock').textContent=fmt(cursor)+' / '+fmt(total())}
 function render() {
  const p=pixels(), length=total();
@@ -89,20 +121,26 @@ $('redoBtn').addEventListener('click',()=>restore(redo,undo));
 for(const id of ['startField','endField','speedField'])$(id).addEventListener('change',updateField);
 $('zoom').addEventListener('input',render);
 $('previewVolume').addEventListener('input',e=>video.volume=Number(e.target.value)/100);
-function toggle(){if(!clips.length)return;if(playing){video.pause();playing=false}else{if(cursor>=total()-.02)seek(0);playing=true;syncVideo(true);video.play().catch(()=>{playing=false})}paintControl()}
+function toggle(){
+ if(!clips.length)return;
+ if(playing){playing=false;video.pause();stopGap()}
+ else{if(cursor>=total()-.02)seek(0);playing=true;syncVideo(true);
+  if(locate(cursor))video.play().catch(()=>{playing=false;paintControl()});
+  else startGap();
+ }paintControl();
+}
 function paintControl(){$('playBtn').textContent=playing?'Ⅱ':'▶'}
 $('playBtn').addEventListener('click',toggle);$('backBtn').addEventListener('click',()=>seek(0));$('forwardBtn').addEventListener('click',()=>seek(cursor+5));
-video.addEventListener('ended',()=>{if(!playing)return;const at=locate(cursor);if(at&&at.index<clips.length-1){cursor=at.at+dlen(clips[at.index])+.001;syncVideo(true);video.play().catch(()=>{playing=false;paintControl()})}else{playing=false;video.pause();cursor=total();paintControl();paintPlayhead()}});
+video.addEventListener('ended',()=>{if(playing)finishClip()});
 video.addEventListener('timeupdate',()=>{
  if(!playing)return;
- let at=locate(cursor);if(!at){playing=false;video.pause();paintControl();return}
- refreshCanvasClip(at.index);
- let c=clips[at.index],approx=clamp((video.currentTime-c.start)/c.speed,0,dlen(c));
- cursor=at.at+approx;
- if(video.currentTime>=c.end-.045){
-   const next=at.index+1;if(next>=clips.length){cursor=total();playing=false;video.pause();paintControl()}
-   else {cursor=at.at+dlen(c)+.001;syncVideo(true);video.play().catch(()=>{playing=false;paintControl()})}
- }
+ const loc=locate(cursor);
+ if(!loc){startGap();return}
+ refreshCanvasClip(loc.index);
+ const clip=clips[loc.index];
+ const estimate=clamp((video.currentTime-clip.start)/clip.speed,0,dlen(clip));
+ cursor=loc.at+estimate;
+ if(video.currentTime>=clip.end-.045){cursor=loc.at+dlen(clip)-.00001;finishClip()}
  paintPlayhead();
 });
 $('ruler').addEventListener('pointerdown',e=>{const rect=$('ruler').getBoundingClientRect();seek((e.clientX-rect.left)/pixels());const move=ev=>seek((ev.clientX-rect.left)/pixels());const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up)};window.addEventListener('pointermove',move);window.addEventListener('pointerup',up)});
@@ -140,7 +178,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function jsonResponse(url,options){const response=await fetch(url,options);let data;try{data=await response.json()}catch{throw Error('Resposta inválida do servidor')}if(!response.ok)throw Error(data.detail||'Falha no servidor');return data}
 $('exportBtn').addEventListener('click',async()=>{
  if(!file||!clips.length)return;
- playing=false;video.pause();paintControl();
+ playing=false;video.pause();stopGap();paintControl();
  $('exportModal').hidden=false;$('closeModal').disabled=true;$('download').hidden=true;$('exportFill').style.width='0%';$('exportPercent').textContent='0%';$('exportStatus').textContent='Enviando vídeo...';$('exportBtn').disabled=true;
  try{
   const form=new FormData();form.append('file',file);
