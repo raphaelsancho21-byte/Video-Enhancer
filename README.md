@@ -133,3 +133,10 @@ No editor, selecione **Preset para plataforma → TikTok HQ · 9:16**. Isso defi
 - Enviar um rascunho não é o mesmo que publicar o vídeo. Postagem direta ao perfil exige `video.publish`, consulta de Creator Info, confirmação de privacidade e revisão adicional da aplicação.
 - Uma configuração sem Client Key/Secret permite exportar TikTok HQ normalmente, mas o botão de conexão informa que é necessária a integração oficial.
 - O tamanho e a duração máximos do envio também dependem dos limites oficiais da API e da conta.
+
+
+## Motion Blur (V1.6)
+
+O editor agora oferece **Motion Blur** na área de exportação, em quatro níveis: desligado, suave (2 quadros), médio (3 quadros) e intenso (5 quadros). O processamento é feito pelo FFmpeg usando `tmix` **por trecho**, evitando misturar quadros entre cortes diferentes. A configuração é salva no projeto JSON.
+
+Este é um efeito de acumulação temporal de quadros (*frame blending*): cria rastros/ghosting controlados em objetos que se movem, mas **não** é motion blur vetorial com estimativa de movimento. A prévia no navegador continua mostrando os quadros originais; veja o resultado no arquivo exportado. Quanto maior a intensidade, maior o processamento e o risco de imagens fantasma, especialmente com movimento rápido e baixa taxa de quadros. Para TikTok, comece em **Suave** e compare com **Desligado**.
