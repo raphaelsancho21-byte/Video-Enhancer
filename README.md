@@ -60,3 +60,11 @@ Abra **http://127.0.0.1:8000/editor** para editar um vídeo com uma timeline.
 - Exportar para MP4 com corte, velocidade, áudio opcional, resolução, melhoria e 60 FPS
 
 **Limites atuais:** só um arquivo de mídia por projeto, sem trilhas de música, texto, stickers, transições ou efeitos avançados. O editor usa um único vídeo original para todos os segmentos. A prévia usa o player HTML5 e pode não suportar alguns formatos que o FFmpeg aceita. A exportação requer FFmpeg e o servidor local ativo. Ainda não há salvamento persistente de projetos.
+
+### Atualização da timeline (V1.2)
+- Prévia limitada à área do player: vídeo vertical ou quadrado não cobre mais a timeline
+- Miniaturas visuais na linha do tempo (quando o navegador consegue decodificar o arquivo)
+- Undo/redo, ajuste por bordas com encaixe, navegação quadro a quadro com as setas
+- Exportação preserva a taxa de quadros de origem (até 60 FPS) quando o modo 60 FPS está desligado
+
+Atualize com `git pull` e **reinicie** `python app.py`. Force o recarregamento do editor com Ctrl+F5.
