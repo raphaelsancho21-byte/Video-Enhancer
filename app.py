@@ -202,6 +202,160 @@ def download(job_id: str):
     return FileResponse(path, media_type="video/mp4", filename="video-enhanced.mp4")
 
 
+
+@app.get("/editor")
+def editor_page():
+    return FileResponse(ROOT / "static" / "editor.html")
+
+
+def probe_audio(path: Path) -> bool:
+    result = subprocess.run(
+        [find_binary("ffprobe"), "-v", "error", "-select_streams", "a:0",
+         "-show_entries", "stream=index", "-of", "csv=p=0", str(path)],
+        capture_output=True, text=True, timeout=40)
+    return result.returncode == 0 and bool(result.stdout.strip())
+
+
+def process_edit(job_id: str, source: Path, destination: Path, segments: list[dict],
+                 quality: str, resolution: str, fps: str, muted: bool):
+    with PROCESS_LOCK:
+        with JOBS_LOCK:
+            JOBS[job_id].update(status="processing", stage="Renderizando edição")
+        try:
+            duration = sum((c["end"] - c["start"]) / c["speed"] for c in segments)
+            has_audio = probe_audio(source) and not muted
+            graph = []
+            for i, c in enumerate(segments):
+                start, end, speed = c["start"], c["end"], c["speed"]
+                graph.append(
+                    f"[0:v:0]trim=start={start:.5f}:end={end:.5f},"
+                    f"setpts=(PTS-STARTPTS)/{speed:.5f},"
+                    f"fps=30,format=yuv420p,setsar=1[v{i}]")
+                if has_audio:
+                    graph.append(
+                        f"[0:a:0]atrim=start={start:.5f}:end={end:.5f},"
+                        f"asetpts=PTS-STARTPTS,atempo={speed:.5f},"
+                        f"aresample=async=1:first_pts=0[a{i}]")
+            if has_audio:
+                inputs = "".join(f"[v{i}][a{i}]" for i in range(len(segments)))
+                graph.append(f"{inputs}concat=n={len(segments)}:v=1:a=1[vcat][aout]")
+            else:
+                inputs = "".join(f"[v{i}]" for i in range(len(segments)))
+                graph.append(f"{inputs}concat=n={len(segments)}:v=1:a=0[vcat]")
+            enhancements = make_filters(quality, resolution, fps)
+            if enhancements:
+                graph.append("[vcat]" + ",".join(enhancements) + "[vout]")
+                video_map = "[vout]"
+            else:
+                video_map = "[vcat]"
+            cmd = [find_binary("ffmpeg"), "-hide_banner", "-nostdin", "-y",
+                   "-i", str(source), "-filter_complex", ";".join(graph),
+                   "-map", video_map]
+            if has_audio:
+                cmd += ["-map", "[aout]"]
+            cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "19",
+                    "-pix_fmt", "yuv420p"]
+            if has_audio:
+                cmd += ["-c:a", "aac", "-b:a", "192k"]
+            cmd += ["-movflags", "+faststart", "-progress", "pipe:1", "-nostats",
+                    str(destination)]
+            with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                  text=True, bufsize=1) as proc:
+                errors = []
+                def drain():
+                    for line in proc.stderr:
+                        errors.append(line[-400:])
+                        if len(errors) > 70:
+                            del errors[:30]
+                reader = threading.Thread(target=drain, daemon=True)
+                reader.start()
+                for line in proc.stdout:
+                    key, _, val = line.strip().partition("=")
+                    if key in ("out_time_us", "out_time_ms"):
+                        try:
+                            percent = min(99, max(0, round(float(val) / 1_000_000 / duration * 100)))
+                            with JOBS_LOCK:
+                                JOBS[job_id]["progress"] = percent
+                        except (ValueError, ZeroDivisionError):
+                            pass
+                code = proc.wait()
+                reader.join(timeout=1)
+                if code:
+                    raise RuntimeError("FFmpeg: " + "".join(errors)[-1000:])
+            with JOBS_LOCK:
+                JOBS[job_id].update(status="done", stage="Concluído", progress=100,
+                                    download=f"/api/jobs/{job_id}/download")
+        except Exception as exc:
+            destination.unlink(missing_ok=True)
+            with JOBS_LOCK:
+                JOBS[job_id].update(status="error", stage="Erro na exportação", error=str(exc)[:1000])
+        finally:
+            source.unlink(missing_ok=True)
+
+
+@app.post("/api/editor/export", status_code=202)
+async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
+                        quality: str = Form("balanced"), resolution: str = Form("1080"),
+                        fps: str = Form("original"), mute: bool = Form(False)):
+    import math
+    if quality not in {"off", "balanced", "strong"} or resolution not in {"original", "720", "1080", "2160"} or fps not in {"original", "60"}:
+        raise HTTPException(400, "Configuração inválida")
+    extension = Path(file.filename or "").suffix.lower()
+    if extension not in ALLOWED_EXT:
+        raise HTTPException(400, "Formato de vídeo inválido")
+    try:
+        find_binary("ffmpeg")
+        find_binary("ffprobe")
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    try:
+        segments = json.loads(clips)
+        if not isinstance(segments, list) or not 1 <= len(segments) <= 100:
+            raise ValueError("Use entre 1 e 100 trechos")
+        for seg in segments:
+            if not isinstance(seg, dict):
+                raise ValueError("Trecho inválido")
+            start, end, speed = (float(seg[k]) for k in ("start", "end", "speed"))
+            if not all(map(math.isfinite, (start, end, speed))) or start < 0 or end - start < 0.08 or speed not in (0.5, 1, 1.5, 2):
+                raise ValueError("Tempos ou velocidade inválidos")
+            seg.update(start=start, end=end, speed=speed)
+    except (ValueError, KeyError, TypeError, OverflowError) as exc:
+        raise HTTPException(400, f"Timeline inválida: {exc}") from exc
+
+    job_id = uuid.uuid4().hex
+    source = UPLOADS / f"{job_id}{extension}"
+    destination = OUTPUTS / f"{job_id}.mp4"
+    size = 0
+    try:
+        with source.open("wb") as dest:
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+                if size > MAX_BYTES:
+                    raise HTTPException(413, "Arquivo acima de 1 GB")
+                dest.write(chunk)
+        if not size:
+            raise HTTPException(400, "Arquivo vazio")
+        meta = await asyncio.to_thread(probe_video, source)
+        if any(c["end"] > meta["duration"] + 0.1 for c in segments):
+            raise HTTPException(400, "Trecho ultrapassa a duração do vídeo")
+        if sum((c["end"]-c["start"])/c["speed"] for c in segments) > 24*3600:
+            raise HTTPException(400, "Edição longa demais")
+    except Exception as exc:
+        source.unlink(missing_ok=True)
+        if isinstance(exc, HTTPException):
+            raise
+        raise HTTPException(400, str(exc)) from exc
+    finally:
+        await file.close()
+    with JOBS_LOCK:
+        JOBS[job_id] = {"id": job_id, "status": "queued", "stage": "Aguardando exportação",
+                        "progress": 0, "error": None, "download": None, "created": time.time()}
+    threading.Thread(target=process_edit,
+                     args=(job_id, source, destination, segments, quality, resolution, fps, mute),
+                     daemon=True).start()
+    return {"id": job_id}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
