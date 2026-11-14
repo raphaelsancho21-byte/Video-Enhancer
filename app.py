@@ -225,7 +225,9 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
                  quality: str, resolution: str, fps: str, muted: bool,
                  composition: dict | None = None, extracted_audio: dict | None = None,
                  export_mode: str = "fast", platform_preset: str = "none",
-                 motion_blur: str = "off"):
+                 motion_blur: str = "off", blur_amount: int = 70,
+                 blur_mix: int = 70, blur_direction: str = "both",
+                 blur_times: int = 2):
     with PROCESS_LOCK:
         with JOBS_LOCK:
             JOBS[job_id].update(status="processing", stage="Renderizando edição")
@@ -304,22 +306,24 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
                     graph.append(f"[background{i}][foreground{i}]overlay=x=(W-w)/2+({x:.5f}):y=(H-h)/2+({y:.5f}):shortest=1:format=auto,format=yuv420p[v{i}]")
                 else:
                     graph.append(chain + f",format=yuv420p[vraw{i}]")
-                # Temporal blur is rendered separately PER CLIP, so frames from
-                # different cuts never bleed/ghost across an edit boundary.
+                # Apply blur PER CLIP, never mix frames across a cut.
+                from motion_blur import motion_blur_filters
+                source_label = f"v{i}" if not identity else f"vraw{i}"
                 if motion_blur == "off":
-                    if t and not identity:
-                        # The transformed output is already named v{i}.
-                        graph.append(f"[v{i}]null[vready{i}]")
-                    else:
-                        graph.append(f"[vraw{i}]null[vready{i}]")
+                    graph.append(f"[{source_label}]null[vready{i}]")
                 else:
-                    mix = {
-                        "light": "tmix=frames=2:weights=1 1",
-                        "medium": "tmix=frames=3:weights=1 2 1",
-                        "strong": "tmix=frames=5:weights=1 2 3 2 1",
-                    }[motion_blur]
-                    source_label = f"v{i}" if t and not identity else f"vraw{i}"
-                    graph.append(f"[{source_label}]{mix},format=yuv420p[vready{i}]")
+                    strength = {
+                        "light": (28, 45, "backward", 1),
+                        "medium": (55, 65, "backward", 2),
+                        "strong": (88, 90, "both", 4),
+                    }
+                    amt, mix, direction, times = strength.get(
+                        motion_blur, (blur_amount, blur_mix, blur_direction, blur_times)
+                    )
+                    graph.extend(motion_blur_filters(
+                        source_label, f"vready{i}", i, base_fps,
+                        amt, mix, direction, times
+                    ))
                 if has_audio:
                     graph.append(
                         f"[0:a:0]atrim=start={start:.5f}:end={end:.5f},"
@@ -423,10 +427,17 @@ async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
                         fps: str = Form("original"), mute: bool = Form(False),
                         composition: str = Form("null"), extracted_audio: str = Form("null"),
                         export_mode: str = Form("fast"), platform_preset: str = Form("none"),
-                        motion_blur: str = Form("off")):
+                        motion_blur: str = Form("off"),
+                        blur_amount: int = Form(70), blur_mix: int = Form(70),
+                        blur_direction: str = Form("both"),
+                        blur_times: int = Form(2)):
     import math
-    if motion_blur not in {"off", "light", "medium", "strong"}:
+    if motion_blur not in {"off", "light", "medium", "strong", "custom"}:
         raise HTTPException(400, "Intensidade de Motion Blur inválida")
+    if not (0 <= blur_amount <= 100 and 0 <= blur_mix <= 100 and
+            blur_direction in {"both", "backward", "forward"} and
+            blur_times in {1, 2, 4, 6}):
+        raise HTTPException(400, "Controles do Motion Blur inválidos")
     if platform_preset not in {"none", "tiktok_hq"}:
         raise HTTPException(400, "Preset de exportação inválido")
     if export_mode not in {"fast", "quality"}:
@@ -521,7 +532,7 @@ async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
         JOBS[job_id] = {"id": job_id, "status": "queued", "stage": "Aguardando exportação",
                         "progress": 0, "error": None, "download": None, "created": time.time()}
     threading.Thread(target=process_edit,
-                     args=(job_id, source, destination, segments, quality, resolution, fps, mute, comp, audio_setting, export_mode, platform_preset, motion_blur),
+                     args=(job_id, source, destination, segments, quality, resolution, fps, mute, comp, audio_setting, export_mode, platform_preset, motion_blur, blur_amount, blur_mix, blur_direction, blur_times),
                      daemon=True).start()
     return {"id": job_id}
 
