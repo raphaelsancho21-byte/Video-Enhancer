@@ -82,3 +82,14 @@ html,body{height:100%;width:100%;overflow:hidden}
 .tiktok-share>.accent{display:block;width:100%;margin:12px 0;padding:11px}
 .tiktok-share .buttonrow{margin:11px 0}
 .tiktok-share .buttonrow button{min-width:0}
+
+/* Motion Blur PRO: compact, touch-friendly controls */
+.motion-pro-panel{margin-top:16px;padding:12px 10px;border:1px solid #394259;background:#171f30;border-radius:10px}
+.motion-title{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:#d9d5ff;margin:1px 0 14px}
+.motion-title span{font-size:10px;color:#9cacc9;text-align:right}
+.motion-pro-panel .field{margin:12px 0}
+.motion-controls>input[type=range]{width:100%;height:24px;accent-color:#8675fa;touch-action:pan-x}
+.motion-slider-label{font-size:11px;color:#c1c9db;display:flex;align-items:center;justify-content:space-between;margin:12px 0 2px}
+.motion-slider-label output{color:#c8bcff;font-variant-numeric:tabular-nums}
+.motion-controls .hint{margin:8px 0 2px}
+.motion-controls.is-off{opacity:.43;pointer-events:none}
