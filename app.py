@@ -222,7 +222,7 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
         with JOBS_LOCK:
             JOBS[job_id].update(status="processing", stage="Renderizando edição")
         try:
-            duration = sum((c["end"] - c["start"]) / c["speed"] for c in segments)
+            duration = max((c.get("at", 0) + (c["end"] - c["start"]) / c["speed"] for c in segments), default=0)
             has_audio = probe_audio(source) and not muted
             import math
             meta = probe_video(source)
@@ -238,7 +238,25 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
             except (ValueError, ZeroDivisionError):
                 base_fps = 30.0
             graph = []
+            # All clips are on a single video track in this release.
+            # Insert black frames and optional silence for intentional gaps.
+            rendered = []
+            play_at = 0.0
+            segments = sorted(segments, key=lambda c: c.get("at", 0))
             for i, c in enumerate(segments):
+                at = c.get("at", play_at)
+                gap = max(0.0, at - play_at)
+                if gap > 1 / base_fps:
+                    vg = f"vg{i}"
+                    graph.append(f"color=c=black:s={comp_w}x{comp_h}:r={base_fps:.4f}:d={gap:.6f},format=yuv420p[{vg}]")
+                    if has_audio:
+                        ag = f"ag{i}"
+                        graph.append(f"anullsrc=r=44100:cl=stereo,atrim=duration={gap:.6f},asetpts=PTS-STARTPTS[{ag}]")
+                        rendered.append((vg, ag))
+                    else:
+                        rendered.append((vg, None))
+                play_at = at + (c["end"] - c["start"]) / c["speed"]
+
                 start, end, speed = c["start"], c["end"], c["speed"]
 
                 chain = (f"[0:v:0]trim=start={start:.5f}:end={end:.5f},"
@@ -265,12 +283,13 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
                         f"[0:a:0]atrim=start={start:.5f}:end={end:.5f},"
                         f"asetpts=PTS-STARTPTS,atempo={speed:.5f},"
                         f"aresample=async=1:first_pts=0[a{i}]")
+                rendered.append((f"v{i}", f"a{i}" if has_audio else None))
             if has_audio:
-                inputs = "".join(f"[v{i}][a{i}]" for i in range(len(segments)))
-                graph.append(f"{inputs}concat=n={len(segments)}:v=1:a=1[vcat][aout]")
+                inputs = "".join(f"[{v}][{a}]" for v, a in rendered)
+                graph.append(f"{inputs}concat=n={len(rendered)}:v=1:a=1[vcat][aout]")
             else:
-                inputs = "".join(f"[v{i}]" for i in range(len(segments)))
-                graph.append(f"{inputs}concat=n={len(segments)}:v=1:a=0[vcat]")
+                inputs = "".join(f"[{v}]" for v, _ in rendered)
+                graph.append(f"{inputs}concat=n={len(rendered)}:v=1:a=0[vcat]")
             enhancements = make_filters(quality, resolution, fps)
             if enhancements:
                 graph.append("[vcat]" + ",".join(enhancements) + "[vout]")
@@ -347,7 +366,10 @@ async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
             start, end, speed = (float(seg[k]) for k in ("start", "end", "speed"))
             if not all(map(math.isfinite, (start, end, speed))) or start < 0 or end - start < 0.08 or speed not in (0.5, 1, 1.5, 2):
                 raise ValueError("Tempos ou velocidade inválidos")
-            seg.update(start=start, end=end, speed=speed)
+            at = float(seg.get("at", 0))
+            if not math.isfinite(at) or at < 0 or at > 24 * 3600:
+                raise ValueError("Posição de clipe inválida")
+            seg.update(start=start, end=end, speed=speed, at=at)
             transform = seg.get("transform")
             if transform is not None:
                 if not isinstance(transform, dict):
@@ -375,7 +397,11 @@ async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
         meta = await asyncio.to_thread(probe_video, source)
         if any(c["end"] > meta["duration"] + 0.1 for c in segments):
             raise HTTPException(400, "Trecho ultrapassa a duração do vídeo")
-        if sum((c["end"]-c["start"])/c["speed"] for c in segments) > 24*3600:
+        ordered = sorted(segments, key=lambda c: c["at"])
+        for left, right in zip(ordered, ordered[1:]):
+            if left["at"] + (left["end"]-left["start"])/left["speed"] > right["at"] + 1/30:
+                raise HTTPException(400, "Clipes sobrepostos na mesma faixa")
+        if max((c["at"] + (c["end"]-c["start"])/c["speed"] for c in segments), default=0) > 24*3600:
             raise HTTPException(400, "Edição longa demais")
     except Exception as exc:
         source.unlink(missing_ok=True)
