@@ -1,7 +1,7 @@
 (()=>{
 'use strict';
 const $=id=>document.getElementById(id),round=(v,f=30)=>Math.round(v*f)/f,clamp=(n,a,b)=>Math.min(b,Math.max(a,n));
-const S={magnet:true,beatSnap:true,ripple:true,beats:[],manual:[],waveform:[],analyzed:null,music:null,raf:0,drag:null};
+const S={magnet:true,beatSnap:true,ripple:true,beats:[],baseBeats:[],beatOffset:0,manual:[],waveform:[],analyzed:null,music:null,raf:0,drag:null};
 let B;
 const get=()=>window.VideoEnhancerTimelineBridge;
 const frames=()=>Number(get()?.fps?.()||30);
@@ -176,18 +176,24 @@ function toggle(button,field){const el=$(button);el.classList.toggle('on',S[fiel
 toggle('magnetToggle','magnet');toggle('beatToggle','beatSnap');toggle('rippleToggle','ripple');
 $('beatFile').addEventListener('change',e=>{S.music=e.target.files[0]||null;$('beatInfo').textContent=S.music?'Música selecionada: '+S.music.name:'';$('detectBeats').disabled=!(S.music||get()?.file())});
 $('detectBeats').addEventListener('click',async()=>{
- const file=S.music||get()?.file();if(!file)return;
- $('detectBeats').disabled=true;$('beatInfo').textContent='Analisando batidas (sem usar RAM para o vídeo inteiro)...';
+ const asset=window.VideoEnhancerProjectMedia?.getAudio();
+ const file=S.music||get()?.file();
+ if(!asset&&!file)return;
+ $('detectBeats').disabled=true;$('beatInfo').textContent='Analisando áudio uma única vez...';
  try{
-  const form=new FormData();form.append('file',file);
-  const response=await fetch('/api/editor/beats',{method:'POST',body:form});
+  let response;
+  if(asset&&!S.music)response=await fetch('/api/editor/audio/'+encodeURIComponent(asset.id)+'/beats',{method:'POST'});
+  else{const form=new FormData();form.append('file',file);response=await fetch('/api/editor/beats',{method:'POST',body:form})}
   const info=await response.json();if(!response.ok)throw Error(info.detail||'Falha na análise');
-  S.beats=info.beats||[];S.waveform=info.waveform||[];S.analyzed={duration:info.duration};
-  $('beatInfo').textContent=S.beats.length+' batidas encontradas. Duplo clique em marcadores manuais para excluir.';
+  S.baseBeats=info.beats||[];S.beatOffset=asset&&!S.music?(window.VideoEnhancerProjectMedia?.getAudioAt()||0):0;
+  S.beats=S.baseBeats.map(t=>round(t+S.beatOffset,frames()));
+  S.waveform=info.waveform||[];S.analyzed={duration:info.duration};
+  if(asset&&!S.music)window.VideoEnhancerProjectMedia?.acceptAnalysis(info);
+  $('beatInfo').textContent=S.beats.length+' batidas detectadas na faixa do projeto.';
   visualize();
  }catch(e){$('beatInfo').textContent='Falha: '+e.message}
  finally{$('detectBeats').disabled=false}
 });
 $('addBeatMarker').addEventListener('click',()=>{S.manual.push(round(get().cursor(),frames()));S.manual.sort((a,b)=>a-b);visualize()});
-window.TimelineSmart={bindClip,snap,normalize,insertAfter,deleteAt,visualize,clearGuide,get ripple(){return S.ripple},get manual(){return S.manual},loadMarkers(value){S.manual=Array.isArray(value)?value.filter(Number.isFinite).slice(0,200):[];visualize()},get detected(){return S.beats},ready(){visualize();$('detectBeats').disabled=!get()?.file()}};
+window.TimelineSmart={bindClip,snap,normalize,insertAfter,deleteAt,visualize,clearGuide,get ripple(){return S.ripple},get manual(){return S.manual},loadMarkers(value){S.manual=Array.isArray(value)?value.filter(Number.isFinite).slice(0,200):[];visualize()},get detected(){return S.beats},shiftDetected(at){if(!S.baseBeats)return;S.beats=S.baseBeats.map(t=>round(t+at,frames()));visualize()},ready(){visualize();$('detectBeats').disabled=!get()?.file()}};
 })();
