@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video Enhancer V2 · Timeline Lab</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,system-ui,Segoe UI,sans-serif;background:#0a0f18;color:#ecf0fa}
+*{box-sizing:border-box}body{margin:0;height:100dvh;display:flex;flex-direction:column}
+button,select,input{font:inherit}button{border:1px solid #3c4760;background:#252e42;color:#e6eafa;border-radius:7px;padding:9px 12px;cursor:pointer}button:disabled{opacity:.4;cursor:not-allowed}button:hover:not(:disabled){border-color:#8c7afc}
+.top{padding:11px 18px;border-bottom:1px solid #2c3549;background:#121b2a;display:flex;gap:12px;align-items:center;flex-wrap:wrap}.top b{font-size:17px}.top .version{font-size:10px;background:#29245b;border:1px solid #6354b2;border-radius:9px;padding:4px 8px;color:#bbb3ff}.grow{flex:1}.top a{color:#a99fff;text-decoration:none;font-size:12px}
+.top button.accent,.accent{background:#6959e2;border-color:#7365f3;color:white}
+.main{flex:1;min-height:0;display:grid;grid-template-columns:245px minmax(260px,1fr) 230px;overflow:hidden}
+.panel{padding:17px;background:#121a28;border-right:1px solid #2a3448;overflow:auto;scrollbar-width:thin}.panel.right{border-right:0;border-left:1px solid #2a3448}
+.panel h2{font-size:12px;letter-spacing:1.3px;color:#a7b3cd;text-transform:uppercase;margin:4px 0 17px}
+.hint{color:#8999b3;font-size:11px;line-height:1.5}.file-btn{display:block;text-align:center;border:1px dashed #665ec0;padding:14px;border-radius:8px;background:#24254d;color:#beb9ff;cursor:pointer;margin-bottom:14px}
+.media-item{padding:10px;background:#222d40;border-radius:7px;margin-top:8px;border:1px solid #37455e;font-size:12px;overflow-wrap:anywhere;cursor:pointer}
+.media-item.active{border-color:#b2a5ff;background:#35315e}.media-item small{display:block;color:#91a2bf;margin-top:5px}.field{margin:12px 0}.field label{display:block;color:#a8b5cd;font-size:11px;margin-bottom:5px}
+.field input,.field select{background:#20283a;border:1px solid #3d4962;color:#e9efff;width:100%;border-radius:6px;padding:8px}
+.row{display:flex;gap:7px}.row>*{flex:1;min-width:0}
+.viewer{min-width:0;display:flex;flex-direction:column;background:#090e17}
+.viewer-header{padding:13px 18px;border-bottom:1px solid #252f43;font-size:12px;color:#a8b7d4}
+.viewer-area{flex:1;min-height:0;display:grid;place-items:center;background:radial-gradient(circle,#1a2132,#090e17);padding:14px}
+.viewer video{max-width:100%;max-height:100%;width:auto;height:auto;background:black;object-fit:contain}
+.transport{height:55px;border-top:1px solid #2c3548;display:flex;gap:12px;align-items:center;justify-content:center}
+.transport span{font-size:12px;color:#b5c3db;font-variant-numeric:tabular-nums}
+.timeline{height:290px;border-top:1px solid #39465d;background:#111a28;display:flex;flex-direction:column;min-height:0}
+.tools{display:flex;gap:7px;align-items:center;overflow-x:auto;padding:10px;border-bottom:1px solid #2b3850;white-space:nowrap;scrollbar-width:thin}
+.tools button{padding:7px 9px;font-size:11px}.tools label{font-size:11px;color:#a8b6cd}.tools input{width:90px;vertical-align:middle}
+.scroll{overflow:auto;flex:1;min-height:0;position:relative}
+.content{position:relative;min-width:100%;min-height:100%}
+.ruler{height:30px;position:relative;margin-left:95px;border-bottom:1px solid #344058}
+.tick{position:absolute;top:5px;font-size:10px;color:#92a1b8}
+.track{height:65px;border-bottom:1px solid #2d384e;display:flex;position:relative}
+.track-head{width:95px;flex-shrink:0;display:flex;flex-direction:column;align-items:stretch;justify-content:center;gap:4px;padding:4px;background:#1a2537;border-right:1px solid #39475e;font-size:11px;color:#afbbd4;position:sticky;left:0;z-index:4}
+.track-head label{display:flex;align-items:center;justify-content:space-between;gap:4px}
+.track-head button{padding:3px 5px;font-size:10px}
+.lane{height:100%;position:relative;flex:1;min-width:500px;background:repeating-linear-gradient(90deg,transparent 0,transparent 59px,#ffffff06 60px)}
+.clip{position:absolute;top:7px;height:49px;min-width:5px;display:flex;flex-direction:column;justify-content:space-between;padding:6px 8px;border:1px solid #8c85fc;background:#373a8c;border-radius:5px;overflow:hidden;white-space:nowrap;font-size:11px;cursor:grab;touch-action:none;user-select:none}
+.track.audio .clip{background:#1f6157;border-color:#55d0b2}.clip.active{outline:2px solid #fff;outline-offset:-2px}.clip small{font-size:10px;color:#c4c5eb}
+.playhead{position:absolute;top:0;bottom:0;left:95px;border-left:2px solid #fae8ff;pointer-events:none;z-index:7}
+.msg{padding:6px 12px;font-size:11px;color:#a4b5d0;background:#101928}
+@media(max-width:840px){.main{grid-template-columns:195px minmax(200px,1fr)}.panel.right{display:none}.timeline{height:280px}}
+@media(max-width:570px){.main{grid-template-columns:1fr}.panel:not(.right){height:125px;display:flex;gap:12px;overflow:auto;align-items:center;flex-wrap:nowrap}.panel:not(.right) h2,.panel:not(.right) .hint{display:none}.main{display:flex;flex-direction:column}.viewer{flex:1;min-height:0}.panel:not(.right){flex-shrink:0}.file-btn{min-width:120px;margin:0}.timeline{height:290px;flex-shrink:0}.top{padding:9px}}
+</style></head><body>
+<div class="top"><b>✦ Video Enhancer</b><span class="version">V2 · LAB</span><span class="hint">Motor multifaixas experimental</span><div class="grow"></div><button id="save">↓ Salvar JSON</button><label class="file-btn" style="margin:0;padding:7px 11px">↑ Abrir JSON<input id="openProject" type="file" accept=".json" hidden></label><a href="/editor">Voltar à V1</a></div>
+<div class="main">
+<aside class="panel"><h2>Mídias</h2><label class="file-btn">＋ Importar vídeos/áudios<input id="files" type="file" multiple accept="video/*,audio/*" hidden></label><div id="media" aria-label="Mídias do projeto"></div><p class="hint">Selecione uma mídia e use “Inserir” para colocá-la na faixa. Os arquivos continuam no dispositivo.</p></aside>
+<section class="viewer"><div class="viewer-header" id="previewStatus">Pré-visualização (clipe selecionado)</div><div class="viewer-area"><video id="preview" playsinline controls></video></div><div class="transport"><button id="prev">⏮</button><button id="play">▶</button><span id="clock">00:00.00 / 00:00.00</span><button id="next">⏭</button></div></section>
+<aside class="panel right"><h2>Propriedades e faixas</h2><div class="row"><button id="addVideo">＋ V</button><button id="addAudio">＋ A</button><button id="addOverlay">＋ Overlay</button></div><div class="field"><label>Faixa de destino</label><select id="trackSelect"></select></div><div class="field"><label>Início na timeline (segundos)</label><input id="timeInput" type="number" step=".033333" value="0" min="0"></div><button id="insert" class="accent">＋ Inserir mídia</button><div class="field"><label>Trecho selecionado</label><div id="selected" class="hint">Nenhum</div></div><div class="row"><button id="split">✂ Dividir</button><button id="remove">⌫ Excluir</button></div><div class="field"><label>Deslocar selecionado para (segundos)</label><input id="moveInput" type="number" step=".033333" min="0" value="0"></div><button id="move">Mover / encaixar</button><p class="hint">Cada faixa impede sobreposição. Faixas diferentes podem se sobrepor. O botão Ripple empurra clipes posteriores.</p></aside>
+</div>
+<section class="timeline">
+<div class="tools"><button id="undo">↶</button><button id="redo">↷</button><button id="splitSmall">✂ Dividir</button><button id="removeSmall">⌫ Excluir</button><button id="insertSmall">＋ Inserir</button><label><input id="ripple" type="checkbox" checked> Ripple</label><label>Zoom <input id="zoom" type="range" min="15" max="140" value="55"></label><span class="grow"></span><span id="counter" class="hint"></span></div>
+<div class="scroll" id="scroll"><div id="content" class="content"><div id="ruler" class="ruler"></div><div id="trackContainer"></div><div id="playhead" class="playhead"></div></div></div>
+<div id="message" class="msg" role="status">Importe uma mídia para começar. Nesta etapa, a prévia é do clipe selecionado, não um compositor de múltiplas camadas.</div>
+</section>
+<script src="/static/v2/timeline-engine.js" defer></script>
+<script src="/static/v2/lab.js" defer></script>
+</body></html>
