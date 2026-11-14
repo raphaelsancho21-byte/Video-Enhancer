@@ -246,7 +246,7 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
             for i, c in enumerate(segments):
                 at = c.get("at", play_at)
                 gap = max(0.0, at - play_at)
-                if gap > 1 / base_fps:
+                if gap >= 0.5 / base_fps:
                     vg = f"vg{i}"
                     graph.append(f"color=c=black:s={comp_w}x{comp_h}:r={base_fps:.4f}:d={gap:.6f},format=yuv420p[{vg}]")
                     if has_audio:
