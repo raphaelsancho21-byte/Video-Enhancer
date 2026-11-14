@@ -224,13 +224,42 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
         try:
             duration = sum((c["end"] - c["start"]) / c["speed"] for c in segments)
             has_audio = probe_audio(source) and not muted
+            import math
+            meta = probe_video(source)
+            comp_w = int(meta["width"]) // 2 * 2
+            comp_h = int(meta["height"]) // 2 * 2
+            rate = subprocess.run(
+                [find_binary("ffprobe"), "-v", "error", "-select_streams", "v:0",
+                 "-show_entries", "stream=avg_frame_rate", "-of", "default=nokey=1:noprint_wrappers=1", str(source)],
+                capture_output=True, text=True, timeout=40)
+            try:
+                n, d = rate.stdout.strip().split("/")
+                base_fps = max(1, min(60, float(n) / float(d)))
+            except (ValueError, ZeroDivisionError):
+                base_fps = 30.0
             graph = []
             for i, c in enumerate(segments):
                 start, end, speed = c["start"], c["end"], c["speed"]
-                graph.append(
-                    f"[0:v:0]trim=start={start:.5f}:end={end:.5f},"
-                    f"setpts=(PTS-STARTPTS)/{speed:.5f},"
-                    f"fps={base_fps:.4f},format=yuv420p,setsar=1[v{i}]")
+
+                chain = (f"[0:v:0]trim=start={start:.5f}:end={end:.5f},"
+                         f"setpts=(PTS-STARTPTS)/{speed:.5f},"
+                         f"fps={base_fps:.4f},setsar=1")
+                t = c.get("transform")
+                if t:
+                    w = max(2, int(round(t["width"] / 2) * 2))
+                    h = max(2, int(round(t["height"] / 2) * 2))
+                    angle = t["rotation"] * math.pi / 180
+                    # Frame center is t.x/t.y in composition pixels. Rotation happens around
+                    # the scaled video's center; overlay positions the rotated bounds.
+                    chain += (f",scale={w}:{h}:flags=lanczos,format=rgba,"
+                              f"rotate={angle:.9f}:ow=rotw({angle:.9f}):oh=roth({angle:.9f}):c=none[foreground{i}]")
+                    graph.append(chain)
+                    graph.append(f"color=c=black:s={comp_w}x{comp_h}:r={base_fps:.4f}:d={(end-start)/speed:.6f}[background{i}]")
+                    x = t["x"] - comp_w / 2
+                    y = t["y"] - comp_h / 2
+                    graph.append(f"[background{i}][foreground{i}]overlay=x=(W-w)/2+({x:.5f}):y=(H-h)/2+({y:.5f}):shortest=1:format=auto,format=yuv420p[v{i}]")
+                else:
+                    graph.append(chain + f",format=yuv420p[v{i}]")
                 if has_audio:
                     graph.append(
                         f"[0:a:0]atrim=start={start:.5f}:end={end:.5f},"
@@ -319,6 +348,14 @@ async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
             if not all(map(math.isfinite, (start, end, speed))) or start < 0 or end - start < 0.08 or speed not in (0.5, 1, 1.5, 2):
                 raise ValueError("Tempos ou velocidade inválidos")
             seg.update(start=start, end=end, speed=speed)
+            transform = seg.get("transform")
+            if transform is not None:
+                if not isinstance(transform, dict):
+                    raise ValueError("Transformação inválida")
+                vals = {k: float(transform[k]) for k in ("x", "y", "width", "height", "rotation")}
+                if not all(map(math.isfinite, vals.values())) or not 2 <= vals["width"] <= 16000 or not 2 <= vals["height"] <= 16000 or not -36000 <= vals["x"] <= 36000 or not -36000 <= vals["y"] <= 36000 or abs(vals["rotation"]) > 36000:
+                    raise ValueError("Dimensões ou posição fora do limite")
+                seg["transform"] = vals
     except (ValueError, KeyError, TypeError, OverflowError) as exc:
         raise HTTPException(400, f"Timeline inválida: {exc}") from exc
 
