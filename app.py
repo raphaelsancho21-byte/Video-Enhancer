@@ -219,7 +219,8 @@ def probe_audio(path: Path) -> bool:
 
 def process_edit(job_id: str, source: Path, destination: Path, segments: list[dict],
                  quality: str, resolution: str, fps: str, muted: bool,
-                 composition: dict | None = None, extracted_audio: dict | None = None):
+                 composition: dict | None = None, extracted_audio: dict | None = None,
+                 export_mode: str = "fast"):
     with PROCESS_LOCK:
         with JOBS_LOCK:
             JOBS[job_id].update(status="processing", stage="Renderizando edição")
@@ -310,7 +311,12 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
             else:
                 inputs = "".join(f"[{v}]" for v, _ in rendered)
                 graph.append(f"{inputs}concat=n={len(rendered)}:v=1:a=0[vcat]")
-            enhancements = make_filters(quality, "original" if composition else resolution, fps)
+            # Fast mode avoids expensive motion-estimated frame interpolation and
+            # prioritizes low CPU / RAM consumption. The quality mode keeps it.
+            effect_fps = "original" if export_mode == "fast" else fps
+            enhancements = make_filters(quality, "original" if composition else resolution, effect_fps)
+            if export_mode == "fast" and fps == "60":
+                enhancements.append("fps=60")
             if enhancements:
                 graph.append("[vcat]" + ",".join(enhancements) + "[vout]")
                 video_map = "[vout]"
@@ -342,8 +348,10 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
                        "-i", str(source), "-i", str(audio_path),
                        "-filter_complex", ";".join(graph), "-map", video_map,
                        "-map", "[external_audio]"]
-            cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "19",
-                    "-pix_fmt", "yuv420p"]
+            codec_preset = "ultrafast" if export_mode == "fast" else "veryfast"
+            codec_crf = "21" if export_mode == "fast" else "19"
+            cmd += ["-c:v", "libx264", "-preset", codec_preset, "-crf", codec_crf,
+                    "-threads", "2" if export_mode == "fast" else "0", "-pix_fmt", "yuv420p"]
             if has_audio or separate_audio:
                 cmd += ["-c:a", "aac", "-b:a", "192k"]
             cmd += ["-movflags", "+faststart", "-progress", "pipe:1", "-nostats",
@@ -386,8 +394,11 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
 async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
                         quality: str = Form("balanced"), resolution: str = Form("1080"),
                         fps: str = Form("original"), mute: bool = Form(False),
-                        composition: str = Form("null"), extracted_audio: str = Form("null")):
+                        composition: str = Form("null"), extracted_audio: str = Form("null"),
+                        export_mode: str = Form("fast")):
     import math
+    if export_mode not in {"fast", "quality"}:
+        raise HTTPException(400, "Modo de exportação inválido")
     if quality not in {"off", "balanced", "strong"} or resolution not in {"original", "720", "1080", "2160"} or fps not in {"original", "60"}:
         raise HTTPException(400, "Configuração inválida")
     extension = Path(file.filename or "").suffix.lower()
@@ -478,7 +489,7 @@ async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
         JOBS[job_id] = {"id": job_id, "status": "queued", "stage": "Aguardando exportação",
                         "progress": 0, "error": None, "download": None, "created": time.time()}
     threading.Thread(target=process_edit,
-                     args=(job_id, source, destination, segments, quality, resolution, fps, mute, comp, audio_setting),
+                     args=(job_id, source, destination, segments, quality, resolution, fps, mute, comp, audio_setting, export_mode),
                      daemon=True).start()
     return {"id": job_id}
 
