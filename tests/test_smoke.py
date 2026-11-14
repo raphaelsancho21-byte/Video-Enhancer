@@ -59,6 +59,31 @@ def main():
             raise AssertionError(JOBS[key].get("error", JOBS[key]))
         assert blur_result.exists() and blur_result.stat().st_size > 1024
         print("SMOKE PASS: motion blur export works across two clips")
+        # The stronger custom filter must still preserve video duration and
+        # not introduce frames belonging to an adjacent clip.
+        extra = temp / "blur_advanced_source.mp4"
+        advanced = temp / "blur_advanced.mp4"
+        subprocess.run([
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=128x72:rate=30:duration=3",
+            "-c:v", "libx264", "-preset", "ultrafast",
+            "-pix_fmt", "yuv420p", str(extra)
+        ], check=True)
+        key = "advanced-motion-blur"
+        JOBS[key] = {"id": key, "status": "queued", "stage": "queued", "progress": 0}
+        process_edit(key, extra, advanced, segments, "off", "original",
+                     "original", False, None, None, "fast", "none",
+                     "custom", 100, 95, "both", 6)
+        if JOBS[key]["status"] != "done":
+            raise AssertionError(JOBS[key].get("error", JOBS[key]))
+        result = subprocess.run([
+            "ffprobe", "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "stream=nb_frames,duration",
+            "-of", "json", str(advanced)
+        ], capture_output=True, text=True, check=True)
+        stream = json.loads(result.stdout)["streams"][0]
+        assert 2.3 <= float(stream["duration"]) <= 2.8, stream
+        print("SMOKE PASS: strong bidirectional temporal blur export", stream)
 
 
 if __name__ == "__main__":
