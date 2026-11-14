@@ -5,6 +5,10 @@ const pixels = () => Number($('zoom').value);
 let file = null, sourceUrl = '', sourceDuration = 0, clips = [], selected = -1, cursor = 0, playing = false, editing = false, dragging = null, undo = [], redo = [], toastTimeout, thumbnails=[], pendingProject=null;
 const clamp = (x,a,b) => Math.max(a,Math.min(b,x));
 const dlen = c => (c.end-c.start)/c.speed;
+let currentCanvasClip=-1;
+const canvasApi=()=>window.VideoEnhancerCanvas;
+function refreshCanvasClip(index){if(index===currentCanvasClip)return;currentCanvasClip=index;const api=canvasApi();if(!api)return;if(index<0||!clips[index]){api.set(null);return}const c=clips[index];c.transform=api.ensure(c.transform);api.set(c.transform)}
+window.addEventListener('video-enhancer-canvas-change',e=>{const idx=currentCanvasClip;if(idx>=0&&clips[idx])clips[idx].transform={...e.detail}});
 const total = () => clips.reduce((sum,c)=>sum+dlen(c),0);
 const fmt = t => {t=Math.max(0,t||0);return String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0')+'.'+String(Math.floor((t%1)*100)).padStart(2,'0')};
 const notify = text => {const n=$('toast');n.textContent=text;n.hidden=false;clearTimeout(toastTimeout);toastTimeout=setTimeout(()=>n.hidden=true,3400)};
@@ -18,6 +22,7 @@ function syncVideo(force=false) {
  const clip=clips[loc.index],pos=clip.start+loc.local*clip.speed;
  video.playbackRate=clip.speed;
  if(force || Math.abs(video.currentTime-pos)>.13) video.currentTime=pos;
+ refreshCanvasClip(loc.index);
 }
 function seek(t,force=true){cursor=clamp(t,0,total());syncVideo(force);paintPlayhead()}
 function paintPlayhead(){const x=90+cursor*pixels();$('playhead').style.left=x+'px';$('clock').textContent=fmt(cursor)+' / '+fmt(total())}
@@ -62,7 +67,7 @@ function split(){
  const at=locate(cursor);if(!at)return;
  const c=clips[at.index],sourcePos=c.start+at.local*c.speed;
  if(sourcePos<=c.start+.08||sourcePos>=c.end-.08){notify('Posicione a linha de corte dentro de um trecho');return}
- snapshot();clips.splice(at.index,1,{...c,end:sourcePos},{...c,start:sourcePos});selected=at.index+1;render();notify('Trecho dividido');
+ snapshot();clips.splice(at.index,1,{...c,end:sourcePos,transform:c.transform?{...c.transform}:undefined},{...c,start:sourcePos,transform:c.transform?{...c.transform}:undefined});selected=at.index+1;render();notify('Trecho dividido');
 }
 function remove(){
  if(selected<0)return;snapshot();clips.splice(selected,1);selected=clips.length?Math.min(selected,clips.length-1):-1;seek(Math.min(cursor,total()));render();
@@ -80,14 +85,16 @@ async function importFile(f){
  file=f;sourceUrl=URL.createObjectURL(f);video.pause();video.src=sourceUrl;video.load();
  await new Promise((res,rej)=>{video.onloadedmetadata=res;video.onerror=()=>rej(Error('Formato não reproduzível pelo navegador'))}).catch(err=>notify(err.message));
  if(!Number.isFinite(video.duration)||video.duration<=0){file=null;return}
- sourceDuration=video.duration;clips=[{start:0,end:sourceDuration,speed:1}];selected=0;cursor=0;undo=[];redo=[];thumbnails=[];playing=false;
+ sourceDuration=video.duration;
+ canvasApi()?.dimension(video.videoWidth,video.videoHeight);currentCanvasClip=-1;
+ clips=[{start:0,end:sourceDuration,speed:1}];selected=0;cursor=0;undo=[];redo=[];thumbnails=[];playing=false;
  if(pendingProject){const project=pendingProject;pendingProject=null;applyProject(project)}
  $('emptyPreview').hidden=true;$('asset').classList.remove('empty');$('asset').querySelector('.asset-thumb').textContent='▶';$('asset').querySelector('.asset-caption').textContent=f.name;
  $('resolutionInfo').textContent=video.videoWidth+'×'+video.videoHeight;render();seek(0);notify('Vídeo importado');makeThumbnails(sourceUrl).then(imgs=>{if(sourceUrl&&imgs.length){thumbnails=imgs;render()}}).catch(()=>{});
 }
 $('importFile').addEventListener('change',e=>importFile(e.target.files[0]));
 $('splitBtn').addEventListener('click',split);$('deleteBtn').addEventListener('click',remove);$('removeBtn').addEventListener('click',remove);
-$('duplicateBtn').addEventListener('click',()=>{if(selected<0)return;snapshot();clips.splice(selected+1,0,{...clips[selected]});selected++;render()});
+$('duplicateBtn').addEventListener('click',()=>{if(selected<0)return;snapshot();clips.splice(selected+1,0,{...clips[selected],transform:clips[selected].transform?{...clips[selected].transform}:undefined});selected++;render()});
 $('undoBtn').addEventListener('click',()=>restore(undo,redo));
 $('redoBtn').addEventListener('click',()=>restore(redo,undo));
 for(const id of ['startField','endField','speedField'])$(id).addEventListener('change',updateField);
@@ -100,6 +107,7 @@ video.addEventListener('ended',()=>{if(!playing)return;const at=locate(cursor);i
 video.addEventListener('timeupdate',()=>{
  if(!playing)return;
  let at=locate(cursor);if(!at){playing=false;video.pause();paintControl();return}
+ refreshCanvasClip(at.index);
  let c=clips[at.index],approx=clamp((video.currentTime-c.start)/c.speed,0,dlen(c));
  cursor=at.at+approx;
  if(video.currentTime>=c.end-.045){
@@ -124,7 +132,7 @@ function applyProject(data){
  if(!file){pendingProject=data;notify('Projeto carregado. Importe agora o arquivo de vídeo original.');return}
  if(data.media&&(data.media.name!==file.name||data.media.size!==file.size)){notify('Importe o vídeo original indicado no projeto: '+data.media.name);pendingProject=data;return}
  if(!data.clips.every(c=>Number.isFinite(c.start)&&Number.isFinite(c.end)&&Number.isFinite(c.speed)&&c.start>=0&&c.end>c.start&&c.end<=sourceDuration+.1&&[.5,1,1.5,2].includes(c.speed))){notify('Tempos inválidos no projeto');return}
- snapshot();clips=data.clips.map(c=>({start:c.start,end:Math.min(c.end,sourceDuration),speed:c.speed}));selected=clips.length?0:-1;
+ snapshot();clips=data.clips.map(c=>({start:c.start,end:Math.min(c.end,sourceDuration),speed:c.speed,transform:c.transform?canvasApi()?.ensure(c.transform):undefined}));selected=clips.length?0:-1;currentCanvasClip=-1;
  $('projectName').value=String(data.title||'Meu projeto').slice(0,70);
  if(data.settings){for(const key of ['quality','resolution','fps']){const id='export'+key[0].toUpperCase()+key.slice(1);if($(id)&&[...$(id).options].some(o=>o.value===data.settings[key]))$(id).value=data.settings[key]}$('muteExport').checked=!!data.settings.mute}
  seek(0);render();notify('Projeto aberto com sucesso');
