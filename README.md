@@ -73,3 +73,30 @@ Atualize com `git pull` e **reinicie** `python app.py`. Force o recarregamento d
 No editor, use **Salvar projeto** para baixar um arquivo `.veproj.json` com cortes, ordem, velocidades e configurações. Use **Abrir projeto** para restaurar o JSON. Por motivos de privacidade e tamanho, o arquivo JSON **não contém o vídeo**: após abrir, selecione também o mesmo arquivo original. O programa compara nome e tamanho para evitar aplicar cortes sobre outro vídeo.
 
 **Limitações da V1.2:** a timeline ainda tem apenas uma faixa de vídeo e uma mídia de origem por projeto. Não há trilhas de texto, áudio independente, efeitos animados, chroma key ou múltiplos arquivos na mesma montagem. Não considere esses recursos implementados. O player reproduz cortes no navegador; a exportação final usa FFmpeg e pode diferir ligeiramente da prévia.
+
+
+## Smart Timeline & Canvas Snapping (V1.3)
+
+Abra o editor em `http://127.0.0.1:8000/editor`.
+
+### Canvas Smart Snapping & Alignment
+- Clique ou toque no vídeo para mover, redimensione pelas 8 alças e use o controle ⟳ para girar.
+- **Smart Snapping** aproxima automaticamente centros X/Y e as quatro bordas da composição. A tolerância equivale a aproximadamente 8 pixels na tela.
+- Botões **Centro X**, **Centro Y** e **Centralizar** fazem alinhamento matemático exato.
+- A caixa usa coordenadas reais da composição, e não pixels CSS. Dimensões, posições e rotação são salvas para cada trecho e enviadas para o filtro de exportação FFmpeg.
+- As guias desaparecem ao soltar. Há suporte a `PointerEvent` (mouse e toque).
+
+### Smart Clip Collision, Ripple e Beat Snapping
+- **Magnet** aproxima cortes a bordas de outros clipes e ao cursor, com tolerância visual de 10 px e quantização temporal de frames.
+- Arraste os clipes pela timeline; a mesma faixa evita sobreposição, com opção **Ripple** para deslocar clipes posteriores.
+- **Beat Snap** alinha início e fim de trechos aos marcadores quando possível, respeitando a colisão na faixa.
+- **Carregar música** seleciona uma trilha apenas para análise de batidas; **Detectar batidas** usa FFmpeg em blocos pequenos (análise sob demanda).
+- A waveform e os marcadores aparecem na timeline. **+ Marcador** adiciona um marcador manual na posição atual; arraste para mover ou dê duplo clique para excluir.
+- No projeto JSON são armazenados os cortes, posições, transformações, preferências de snapping e marcadores manuais.
+
+### Limites atuais
+- A timeline editável e exportável ainda tem **uma única faixa de vídeo**. A sobreposição entre faixas diferentes, composição multicamadas e exportação de músicas externas **ainda não estão implementadas**.
+- O áudio original permanece unido aos trechos de vídeo, com silêncio nos espaços vazios; o arquivo de música separado é usado somente para a detecção.
+- A correspondência prévia/exportação depende da renderização por navegador e FFmpeg; rotação, interpolação e arredondamento de pixels podem produzir diferenças subpixel.
+- Para pouca RAM, use vídeos curtos e evite interpolação 60 FPS com upscale 4K simultâneo.
+- Teste com `python tests/test_smoke.py` (requer dependências Python e FFmpeg).
