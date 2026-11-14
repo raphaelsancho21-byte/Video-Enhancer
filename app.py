@@ -230,7 +230,7 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
                 graph.append(
                     f"[0:v:0]trim=start={start:.5f}:end={end:.5f},"
                     f"setpts=(PTS-STARTPTS)/{speed:.5f},"
-                    f"fps=30,format=yuv420p,setsar=1[v{i}]")
+                    f"fps={base_fps:.4f},format=yuv420p,setsar=1[v{i}]")
                 if has_audio:
                     graph.append(
                         f"[0:a:0]atrim=start={start:.5f}:end={end:.5f},"
