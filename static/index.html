@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#080b13" />
+  <title>Video Enhancer — Melhore seus vídeos</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="glow glow-a"></div><div class="glow glow-b"></div>
+  <header class="header">
+    <div class="brand"><span class="brand-logo">✦</span><span>Video<span class="brand-accent">Enhancer</span></span><small>STUDIO</small></div>
+    <div class="header-meta"><span class="status-dot"></span> Processamento local <span class="version">V1.0</span></div>
+  </header>
+  <main class="shell">
+    <section class="intro">
+      <div class="eyebrow"><span class="spark">✧</span> VIDEO PROCESSING STUDIO</div>
+      <h1>Seus vídeos merecem<br><span>uma nova qualidade.</span></h1>
+      <p>Melhore detalhes, reduza ruídos e transforme seus vídeos em até 60 FPS — sem enviar arquivos para serviços externos.</p>
+    </section>
+    <section class="workspace">
+      <div class="workspace-head"><div><span class="step">01</span><h2>Seu vídeo</h2></div><span class="subdued">MP4 · MOV · MKV · WEBM · AVI · M4V</span></div>
+      <label id="dropzone" class="dropzone" for="videoInput" tabindex="0" role="button" aria-label="Selecionar vídeo">
+        <input id="videoInput" type="file" accept=".mp4,.mov,.mkv,.webm,.avi,.m4v,video/*" hidden>
+        <div class="upload-icon">↑</div>
+        <div class="upload-title">Arraste seu vídeo aqui</div>
+        <div class="upload-note">ou <strong>clique para escolher</strong> um arquivo</div>
+        <div class="upload-limit">Até 1 GB por arquivo</div>
+      </label>
+      <div class="file-card" id="fileCard" hidden>
+        <video id="preview" controls playsinline preload="metadata"></video>
+        <div class="file-info"><div class="file-name" id="fileName"></div><div class="file-detail" id="fileDetail"></div><button id="removeFile" class="text-button" type="button">Trocar vídeo</button></div>
+      </div>
+    </section>
+    <section class="workspace">
+      <div class="workspace-head"><div><span class="step">02</span><h2>Personalizar melhoria</h2></div><span class="subdued">Ajuste o resultado</span></div>
+      <div class="settings">
+        <div class="setting"><div class="setting-copy"><h3>Melhoria de imagem</h3><p>Menos ruído e mais definição</p></div>
+          <select id="quality" aria-label="Melhoria de imagem"><option value="off">Desligada</option><option value="balanced" selected>Equilibrada</option><option value="strong">Forte</option></select></div>
+        <div class="setting"><div class="setting-copy"><h3>Resolução de saída</h3><p>Redimensionamento com filtro Lanczos</p></div>
+          <select id="resolution" aria-label="Resolução de saída"><option value="original" selected>Original</option><option value="720">720p</option><option value="1080">1080p Full HD</option><option value="2160">2160p 4K</option></select></div>
+        <div class="setting"><div class="setting-copy"><h3>Taxa de quadros</h3><p>Interpolação de movimento para suavizar cenas</p></div>
+          <select id="fps" aria-label="Taxa de quadros"><option value="original">Manter original</option><option value="60" selected>60 FPS</option></select></div>
+      </div>
+      <p class="info-box">ⓘ Aumento de resolução não recupera detalhes perdidos. 60 FPS usa interpolação real e pode demorar em PCs mais simples. Esta versão não utiliza modelos de IA.</p>
+    </section>
+    <section class="actions">
+      <button id="processBtn" class="primary" disabled><span>✦</span> Melhorar meu vídeo <span class="btn-arrow">→</span></button>
+      <p id="message" class="message" role="status" aria-live="polite">Selecione um vídeo para começar.</p>
+      <div id="progressArea" class="progress-area" hidden><div class="progress-label"><span id="stage">Preparando...</span><strong id="percentage">0%</strong></div><div class="progress-track"><div id="progressBar" class="progress-fill"></div></div></div>
+      <div id="resultArea" class="result-area" hidden><div class="result-heading">✓ Seu vídeo está pronto!</div><video id="resultPreview" controls playsinline></video><a id="downloadBtn" class="download" download="video-enhanced.mp4">↓ Baixar vídeo melhorado</a></div>
+    </section>
+    <footer>Video Enhancer · Open source · Feito para processar no seu PC <span>Powered by FFmpeg</span></footer>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
