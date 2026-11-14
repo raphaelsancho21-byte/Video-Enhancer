@@ -138,7 +138,13 @@ $('files').addEventListener('change',async e=>{
   probe.removeAttribute('src');probe.load();
   if(!Number.isFinite(duration)||duration<=0){URL.revokeObjectURL(url);msg('Não foi possível ler '+f.name);continue}
   action(()=>{
-   const id=editor.addMedia({name:f.name,kind,duration,sourceId:f.name+'|'+f.size+'|'+f.lastModified});
+   const sourceId=f.name+'|'+f.size+'|'+f.lastModified;
+   // Project restore: reconnect existing media IDs rather than creating
+   // new entries that would leave saved timeline clips offline.
+   const matching=Object.values(editor.media).find(m=>m.sourceId===sourceId&&m.kind===kind);
+   const id=matching?.id||editor.addMedia({name:f.name,kind,duration,sourceId});
+   const existing=files.get(id);
+   if(existing)URL.revokeObjectURL(existing.url);
    files.set(id,{file:f,url});selectedMedia=id;
    if(!editor.tracks.some(t=>t.kind===kind))editor.addTrack(kind);
   });
