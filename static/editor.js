@@ -2,7 +2,7 @@
 const $ = id => document.getElementById(id);
 const video = $('player');
 const pixels = () => Number($('zoom').value);
-let file = null, sourceUrl = '', sourceDuration = 0, clips = [], selected = -1, cursor = 0, playing = false, editing = false, dragging = null, undo = [], redo = [], toastTimeout, thumbnails=[];
+let file = null, sourceUrl = '', sourceDuration = 0, clips = [], selected = -1, cursor = 0, playing = false, editing = false, dragging = null, undo = [], redo = [], toastTimeout, thumbnails=[], pendingProject=null;
 const clamp = (x,a,b) => Math.max(a,Math.min(b,x));
 const dlen = c => (c.end-c.start)/c.speed;
 const total = () => clips.reduce((sum,c)=>sum+dlen(c),0);
@@ -81,6 +81,7 @@ async function importFile(f){
  await new Promise((res,rej)=>{video.onloadedmetadata=res;video.onerror=()=>rej(Error('Formato não reproduzível pelo navegador'))}).catch(err=>notify(err.message));
  if(!Number.isFinite(video.duration)||video.duration<=0){file=null;return}
  sourceDuration=video.duration;clips=[{start:0,end:sourceDuration,speed:1}];selected=0;cursor=0;undo=[];redo=[];thumbnails=[];playing=false;
+ if(pendingProject){const project=pendingProject;pendingProject=null;applyProject(project)}
  $('emptyPreview').hidden=true;$('asset').classList.remove('empty');$('asset').querySelector('.asset-thumb').textContent='▶';$('asset').querySelector('.asset-caption').textContent=f.name;
  $('resolutionInfo').textContent=video.videoWidth+'×'+video.videoHeight;render();seek(0);notify('Vídeo importado');makeThumbnails(sourceUrl).then(imgs=>{if(sourceUrl&&imgs.length){thumbnails=imgs;render()}}).catch(()=>{});
 }
@@ -113,6 +114,31 @@ document.addEventListener('keydown',e=>{const active=document.activeElement;if([
  if(e.ctrlKey && e.key.toLowerCase()==='y'){e.preventDefault();$('redoBtn').click();return}
  if(e.ctrlKey||e.metaKey||e.altKey)return;
  if(e.code==='Space'){e.preventDefault();toggle()}else if(e.key.toLowerCase()==='s')split();else if(e.key==='Delete'||e.key==='Backspace')remove();else if(e.key==='ArrowRight')seek(cursor+1/30);else if(e.key==='ArrowLeft')seek(cursor-1/30)});
+function projectData(){
+ return {format:'video-enhancer-project',version:1,title:$('projectName').value,
+  media:file?{name:file.name,size:file.size,duration:sourceDuration}:null,
+  clips:clips.map(c=>({...c})),settings:{quality:$('exportQuality').value,resolution:$('exportResolution').value,fps:$('exportFps').value,mute:$('muteExport').checked}};
+}
+function applyProject(data){
+ if(!data||data.format!=='video-enhancer-project'||!Array.isArray(data.clips)||data.clips.length>100||!data.clips.length){notify('Projeto JSON inválido');return}
+ if(!file){pendingProject=data;notify('Projeto carregado. Importe agora o arquivo de vídeo original.');return}
+ if(data.media&&(data.media.name!==file.name||data.media.size!==file.size)){notify('Importe o vídeo original indicado no projeto: '+data.media.name);pendingProject=data;return}
+ if(!data.clips.every(c=>Number.isFinite(c.start)&&Number.isFinite(c.end)&&Number.isFinite(c.speed)&&c.start>=0&&c.end>c.start&&c.end<=sourceDuration+.1&&[.5,1,1.5,2].includes(c.speed))){notify('Tempos inválidos no projeto');return}
+ snapshot();clips=data.clips.map(c=>({start:c.start,end:Math.min(c.end,sourceDuration),speed:c.speed}));selected=clips.length?0:-1;
+ $('projectName').value=String(data.title||'Meu projeto').slice(0,70);
+ if(data.settings){for(const key of ['quality','resolution','fps']){const id='export'+key[0].toUpperCase()+key.slice(1);if($(id)&&[...$(id).options].some(o=>o.value===data.settings[key]))$(id).value=data.settings[key]}$('muteExport').checked=!!data.settings.mute}
+ seek(0);render();notify('Projeto aberto com sucesso');
+}
+$('saveProject').addEventListener('click',()=>{
+ if(!file){notify('Importe um vídeo antes de salvar o projeto');return}
+ const blob=new Blob([JSON.stringify(projectData(),null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);
+ const link=document.createElement('a');link.href=url;link.download=($('projectName').value.replace(/[^a-z0-9_-]/gi,'-')||'projeto')+'.veproj.json';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);notify('Projeto JSON salvo');
+});
+$('loadProject').addEventListener('change',async e=>{
+ const f=e.target.files[0];if(!f)return;
+ try{if(f.size>100000)throw Error('Projeto JSON muito grande');applyProject(JSON.parse(await f.text()))}catch(err){notify('Não foi possível abrir o projeto: '+err.message)}
+ e.target.value='';
+});
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function jsonResponse(url,options){const response=await fetch(url,options);let data;try{data=await response.json()}catch{throw Error('Resposta inválida do servidor')}if(!response.ok)throw Error(data.detail||'Falha no servidor');return data}
 $('exportBtn').addEventListener('click',async()=>{
