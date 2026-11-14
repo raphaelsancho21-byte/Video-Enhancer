@@ -237,9 +237,11 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
                 capture_output=True, text=True, timeout=40)
             try:
                 n, d = rate.stdout.strip().split("/")
-                base_fps = max(1, min(60, float(n) / float(d)))
+                source_fps = max(1, min(60, float(n) / float(d)))
+                base_fps = (min(source_fps, 60) if fps == "60" else
+                            float(composition.get("fps", source_fps)) if composition else source_fps)
             except (ValueError, ZeroDivisionError):
-                base_fps = 30.0
+                base_fps = float(composition.get("fps", 30)) if composition else 30.0
             graph = []
             # All clips are on a single video track in this release.
             # Insert black frames and optional silence for intentional gaps.
@@ -273,7 +275,7 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
                      and abs(t["y"] - meta["height"] / 2) < 0.01
                      and abs(t["width"] - meta["width"]) < 0.01
                      and abs(t["height"] - meta["height"]) < 0.01
-                     and abs(t["rotation"] % 360) < 0.00001))
+                     and abs(t["rotation"] % 360) < 0.00001)))
                 
                 if not identity:
                     if not t:
@@ -308,7 +310,7 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
             else:
                 inputs = "".join(f"[{v}]" for v, _ in rendered)
                 graph.append(f"{inputs}concat=n={len(rendered)}:v=1:a=0[vcat]")
-            enhancements = make_filters(quality, resolution, fps)
+            enhancements = make_filters(quality, "original" if composition else resolution, fps)
             if enhancements:
                 graph.append("[vcat]" + ",".join(enhancements) + "[vout]")
                 video_map = "[vout]"
@@ -342,7 +344,7 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
                        "-map", "[external_audio]"]
             cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "19",
                     "-pix_fmt", "yuv420p"]
-            if has_audio:
+            if has_audio or separate_audio:
                 cmd += ["-c:a", "aac", "-b:a", "192k"]
             cmd += ["-movflags", "+faststart", "-progress", "pipe:1", "-nostats",
                     str(destination)]
@@ -404,7 +406,10 @@ async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
             cw, ch = int(comp["width"]), int(comp["height"])
             if not (64 <= cw <= 4096 and 64 <= ch <= 4096 and cw % 2 == 0 and ch % 2 == 0):
                 raise ValueError("Composição deve ter dimensões pares de 64 a 4096")
-            comp = {"width": cw, "height": ch}
+            cfps = int(comp.get("fps", 30))
+            if cfps not in (24, 25, 30, 60):
+                raise ValueError("FPS de composição inválido")
+            comp = {"width": cw, "height": ch, "fps": cfps}
         audio_setting = json.loads(extracted_audio)
         if audio_setting is not None:
             if not isinstance(audio_setting, dict) or not isinstance(audio_setting.get("id"), str):
