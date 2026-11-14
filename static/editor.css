@@ -38,3 +38,19 @@ html,body{height:100%;width:100%;overflow:hidden}
 .canvas-rotate{position:absolute;top:-32px;left:calc(50% - 12px);width:24px;height:24px;display:grid;place-items:center;background:#715eef;color:white;border-radius:50%;cursor:grab;font-size:17px;touch-action:none}
 .canvas-guide{position:absolute;z-index:4;pointer-events:none;background:#3ce8dd;box-shadow:0 0 6px #3ce8dd88}.canvas-guide.horizontal{height:1px;left:0;right:0}.canvas-guide.vertical{width:1px;top:0;bottom:0}
 .canvas-toggle{margin:16px 0}.align-actions{margin-top:9px}.align-actions button{min-width:0}.canvas-status{font-size:10px;color:#a6acd1;margin-top:12px;font-variant-numeric:tabular-nums}
+
+/* Smart timeline: independent time-space, collision on V1, pointer drag */
+.clips{display:block;position:relative;min-width:0}
+.clip{position:absolute;top:0;height:83px;touch-action:none}
+.clip:active{cursor:grabbing}
+.timeline-tools{gap:8px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;flex-shrink:0}
+.timeline-tools .grow{min-width:10px}
+.timeline-tools button{white-space:nowrap}
+.timeline-tools .active-option{color:#b4a8ff;background:#2c2c4e;border-color:#6159b0}
+.timeline-tools .active-option:not(.on){color:#8790a0;background:#1a2231;border-color:#333e53}
+.timeline-wave{position:absolute;top:39px;left:90px;height:34px;pointer-events:none;opacity:.72;z-index:1}
+.marker-layer{position:absolute;top:0;bottom:0;left:90px;pointer-events:none;z-index:5}
+.beat-marker{position:absolute;top:3px;width:10px;height:16px;transform:translateX(-5px);pointer-events:auto;touch-action:none;background:#f3ad49;clip-path:polygon(50% 100%,0 25%,0 0,100% 0,100% 25%);cursor:ew-resize}
+.timeline-snap-guide{position:absolute;top:25px;bottom:0;border-left:1px solid #34e5e2;z-index:6;pointer-events:none;box-shadow:0 0 6px #3ce8dd}
+.beat-button{display:block;width:100%;margin-top:10px;background:#283650;border:1px solid #405677;border-radius:7px;padding:11px 8px;font-size:12px;color:#c0d5ff}
+.beat-button:disabled{opacity:.35}
