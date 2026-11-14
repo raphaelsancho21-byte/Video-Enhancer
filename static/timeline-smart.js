@@ -99,12 +99,17 @@ function onMove(e){
 }
 function finish(e){
  if(!S.drag||e.pointerId!==S.drag.pointer)return;
- const gesture=S.drag;S.drag=null;clearGuide();if(S.raf){cancelAnimationFrame(S.raf);S.raf=0}
- // Ensure a final frame is processed for fast pointer movements.
+ const gesture=S.drag;
+ // Let the pending animation frame apply exactly the last pointer position,
+ // then rebuild DOM only once at gesture end.
+ if(S.raf){cancelAnimationFrame(S.raf);S.raf=0}
+ S.drag=null;clearGuide();
  const c=get().clips()[gesture.index];
- if(gesture.mode==='move'&&gesture.latestX!==undefined){
-   const dt=(gesture.latestX-gesture.client)/px();
+ if(gesture.mode==='move'){
+   const dt=(e.clientX-gesture.client)/px();
+   get().clips().forEach((clip,i)=>clip.at=gesture.start.positions[i]);
    c.at=clampPosition(gesture.index,gesture.start.at+dt);
+   if(S.ripple)shiftAfter(gesture.index,gesture.start.at+duration(c),c.at+duration(c));
  }
  get().seek(Math.min(get().cursor(),get().total()));get().render();
 }
@@ -118,9 +123,9 @@ function bindClip(element,index){
  element.addEventListener('pointerup',finish);
  element.addEventListener('pointercancel',finish);
 }
-function normalize(index){
+function normalize(index,oldEnd){
  const clips=get().clips(),c=clips[index];if(!c)return;
- const before=time(c)+duration(c);
+ const before=Number.isFinite(oldEnd)?oldEnd:time(c)+duration(c);
  const other=clips.map((x,i)=>({i,start:time(x),end:time(x)+duration(x)})).filter(x=>x.i!==index).sort((a,b)=>a.start-b.start);
  let pos=0;for(const o of other){if(o.start>=time(c))break;pos=Math.max(pos,o.end)}
  c.at=Math.max(time(c),pos);
