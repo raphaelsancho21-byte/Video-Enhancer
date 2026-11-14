@@ -140,3 +140,17 @@ No editor, selecione **Preset para plataforma → TikTok HQ · 9:16**. Isso defi
 O editor agora oferece **Motion Blur** na área de exportação, em quatro níveis: desligado, suave (2 quadros), médio (3 quadros) e intenso (5 quadros). O processamento é feito pelo FFmpeg usando `tmix` **por trecho**, evitando misturar quadros entre cortes diferentes. A configuração é salva no projeto JSON.
 
 Este é um efeito de acumulação temporal de quadros (*frame blending*): cria rastros/ghosting controlados em objetos que se movem, mas **não** é motion blur vetorial com estimativa de movimento. A prévia no navegador continua mostrando os quadros originais; veja o resultado no arquivo exportado. Quanto maior a intensidade, maior o processamento e o risco de imagens fantasma, especialmente com movimento rápido e baixa taxa de quadros. Para TikTok, comece em **Suave** e compare com **Desligado**.
+
+
+## Motion Blur PRO (V1.7)
+
+Inspirado na interface de ajuste do CapCut, com controles:
+
+- **Desfocar (0–100)**: aumenta a quantidade de frames incluídos na janela temporal, prolongando os rastros.
+- **Misturar (0–100)**: interpola de imagem original (0) a rastro temporal completo (100).
+- **Direção**: **Retroceder** (frames anteriores), **Encaminhar** (frames seguintes) ou **Ambos** (mistura temporal simétrica).
+- **Vezes**: **Uma vez, 2, 4 ou 6 vezes**: amplia a janela de amostragem temporal. É uma aproximação eficiente do controle de processamento do CapCut, e **não significa reprocessar o vídeo 6 vezes**. O limite de segurança é 16 frames retidos por direção.
+
+O filtro FFmpeg executa uma combinação temporal de quadros com `tmix`, `blend`, `setpts` e `tpad` em cada trecho isolado (sem ghosting de um corte no próximo). A direção futura usa ajuste de timestamps, evitando o filtro `reverse`, que armazenaria todo o trecho na memória. Esse efeito **não é motion blur por vetores de movimento** e não será idêntico ao algoritmo do CapCut. A prévia de vídeo permanece original; o efeito aparece ao exportar.
+
+**Custo**: para 1080p, comece com Desfocar 55, Misturar 65, Ambos e 2 vezes. O máximo (100/100, Ambos, 6 vezes) pode exigir mais RAM e tempo para exportar, principalmente em 4K.
