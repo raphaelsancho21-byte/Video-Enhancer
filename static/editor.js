@@ -24,11 +24,11 @@ function render() {
  $('clips').replaceChildren();
  let offset=0;
  clips.forEach((c,i)=>{
-  const el=document.createElement('div');el.className='clip'+(i===selected?' selected':'');el.style.width=Math.max(4,dlen(c)*p)+'px';el.draggable=true;el.dataset.index=i;
+  const clipOffset=offset;const el=document.createElement('div');el.className='clip'+(i===selected?' selected':'');el.style.width=Math.max(4,dlen(c)*p)+'px';el.draggable=true;el.dataset.index=i;
   el.innerHTML='<div class="trim left"></div><div class="clip-name"></div><div class="clip-duration"></div><div class="trim right"></div>';
   el.querySelector('.clip-name').textContent=(file?.name||'Vídeo')+' · '+(i+1);
   el.querySelector('.clip-duration').textContent=fmt(dlen(c));
-  el.addEventListener('click',e=>{if(dragging)return;selected=i;if(!e.target.classList.contains('trim'))seek(offset+clamp(e.offsetX/p,0,dlen(c)));render()});
+  el.addEventListener('click',e=>{if(dragging)return;selected=i;if(!e.target.classList.contains('trim'))seek(clipOffset+clamp(e.offsetX/p,0,dlen(c)));render()});
   el.addEventListener('dragstart',e=>{if(editing){e.preventDefault();return}dragging=i;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',String(i));el.classList.add('dragging')});
   el.addEventListener('dragover',e=>e.preventDefault());
   el.addEventListener('drop',e=>{e.preventDefault();const from=dragging;dragging=null;if(from===null||from===i)return;snapshot();const [moved]=clips.splice(from,1);clips.splice(i,0,moved);selected=i;seek(0);render();notify('Trechos reordenados')});
