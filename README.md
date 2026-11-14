@@ -68,3 +68,8 @@ Abra **http://127.0.0.1:8000/editor** para editar um vídeo com uma timeline.
 - Exportação preserva a taxa de quadros de origem (até 60 FPS) quando o modo 60 FPS está desligado
 
 Atualize com `git pull` e **reinicie** `python app.py`. Force o recarregamento do editor com Ctrl+F5.
+
+### Projetos de edição
+No editor, use **Salvar projeto** para baixar um arquivo `.veproj.json` com cortes, ordem, velocidades e configurações. Use **Abrir projeto** para restaurar o JSON. Por motivos de privacidade e tamanho, o arquivo JSON **não contém o vídeo**: após abrir, selecione também o mesmo arquivo original. O programa compara nome e tamanho para evitar aplicar cortes sobre outro vídeo.
+
+**Limitações da V1.2:** a timeline ainda tem apenas uma faixa de vídeo e uma mídia de origem por projeto. Não há trilhas de texto, áudio independente, efeitos animados, chroma key ou múltiplos arquivos na mesma montagem. Não considere esses recursos implementados. O player reproduz cortes no navegador; a exportação final usa FFmpeg e pode diferir ligeiramente da prévia.
