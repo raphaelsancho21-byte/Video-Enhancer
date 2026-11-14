@@ -36,6 +36,7 @@ function applyDimensions(w,h,initial=false){
   }
  }
  window.VideoEnhancerCanvas?.dimension(w,h);
+ bridge()?.refreshComposition?.();
  // Force reload of current clip's transform against the new comp dimensions.
  window.dispatchEvent(new CustomEvent('video-enhancer-composition-change',{detail:{width:w,height:h}}));
  $('resolutionInfo').textContent=w+'×'+h+' · composição';
@@ -94,12 +95,7 @@ function syncPlayback(){
  if(shouldPlay&&audio.paused){audio.play().catch(()=>{})}
  if(!shouldPlay&&!audio.paused)audio.pause();
 }
-function clock(){
- state.raf=requestAnimationFrame(clock);
- if(!state.asset)return;
- // Checking only inexpensive playback state; waveform/beat analysis is not repeated here.
- syncPlayback();
-}
+function clock(){if(state.asset)syncPlayback()}
 function loadAsset(data,restore=false){
  audio.pause();audio.src=data.url;audio.load();state.asset=data;
  state.at=restore?state.at:0;state.muted=false;state.volume=1;state.analysis=null;
@@ -154,7 +150,7 @@ function restore(data){
  if(obj.composition){
   const {width,height,fps}=obj.composition;
   if([24,25,30,60].includes(Number(fps))){state.fps=Number(fps);$('projectFps').value=String(fps)}
-  if(dimensionsValid(width,height)){applyDimensions(width,height);$('compositionPreset').value='custom'}
+  if(dimensionsValid(width,height)){applyDimensions(width,height,true);$('compositionPreset').value='custom'}
  }
  if(obj.audio?.id&&typeof obj.audio.url==='string'){
   const setting=obj.audio;
@@ -176,5 +172,5 @@ window.VideoEnhancerProjectMedia={initialize:initSize,resetForMedia,serialize,re
  getAudio:()=>state.asset,getAudioAt:()=>state.at,
  acceptAnalysis:analysis=>{state.analysis=analysis;waveform()},getComposition:()=>({width:state.width,height:state.height,fps:state.fps})};
 window.addEventListener('video-enhancer-timeline-update',update);
-requestAnimationFrame(clock);
+setInterval(clock,80);
 })();
