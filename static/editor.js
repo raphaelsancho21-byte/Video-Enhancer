@@ -13,7 +13,7 @@ const total = () => clips.reduce((max,c)=>Math.max(max,(c.at||0)+dlen(c)),0);
 const fmt = t => {t=Math.max(0,t||0);return String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0')+'.'+String(Math.floor((t%1)*100)).padStart(2,'0')};
 const notify = text => {const n=$('toast');n.textContent=text;n.hidden=false;clearTimeout(toastTimeout);toastTimeout=setTimeout(()=>n.hidden=true,3400)};
 const snapshot = () => {undo.push(clips.map(c=>({...c})));if(undo.length>50)undo.shift();redo=[]};
-const restore = (stack,other) => {if(!stack.length)return;other.push(clips.map(c=>({...c})));clips=stack.pop();selected=clips.length?Math.min(Math.max(selected,0),clips.length-1):-1;seek(Math.min(cursor,total()));render()};
+const restore = (stack,other) => {if(!stack.length)return;other.push(clips.map(c=>({...c})));clips=stack.pop();selected=clips.length?Math.min(Math.max(selected,0),clips.length-1):-1;playing=false;video.pause();stopGap();paintControl();currentCanvasClip=-1;$('emptyPreview').hidden=clips.length>0;seek(Math.min(cursor,total()));render()};
 const timelineSnap = (value, points, radius=.12) => {const target=points.find(x=>Math.abs(x-value)<radius);return target===undefined?value:target};
 const locate = t => {const order=clips.map((c,index)=>({index,c,at:c.at||0})).sort((a,b)=>a.at-b.at);for(const item of order){const end=item.at+dlen(item.c);if(t>=item.at-1e-6&&t<end-1e-6)return {index:item.index,local:Math.max(0,t-item.at),at:item.at}}return null};
 function syncVideo(force=false) {
@@ -91,7 +91,29 @@ function split(){
  snapshot();clips.splice(at.index,1,{...c,end:sourcePos,at:at.at,transform:c.transform?{...c.transform}:undefined},{...c,start:sourcePos,at:at.at+at.local,transform:c.transform?{...c.transform}:undefined});currentCanvasClip=-1;selected=at.index+1;render();notify('Trecho dividido');
 }
 function remove(){
- if(selected<0)return;const oldAt=clips[selected].at||0,oldLength=dlen(clips[selected]);snapshot();clips.splice(selected,1);window.TimelineSmart?.deleteAt(selected,oldAt,oldLength);currentCanvasClip=-1;selected=clips.length?Math.min(selected,clips.length-1):-1;seek(Math.min(cursor,total()));render();
+ if(selected<0||!clips[selected])return;
+ const oldAt=clips[selected].at||0,oldLength=dlen(clips[selected]);
+ snapshot();
+ // Stop every active playback clock before mutating the clip list.
+ playing=false;video.pause();stopGap();paintControl();
+ clips.splice(selected,1);
+ window.TimelineSmart?.deleteAt(selected,oldAt,oldLength);
+ selected=clips.length?Math.min(selected,clips.length-1):-1;
+ currentCanvasClip=-1;
+ if(!clips.length){
+   cursor=0;
+   // Keep the source in the library for Ctrl+Z, but remove it from the composition.
+   canvasApi()?.set(null);
+   $('transformTarget').hidden=true;
+   $('emptyPreview').hidden=false;
+   $('emptyPreview').textContent='Timeline vazia — desfaça ou importe outro vídeo';
+   $('exportBtn').disabled=true;
+ }else{
+   $('emptyPreview').hidden=true;
+ }
+ seek(Math.min(cursor,total()));
+ render();
+ notify(clips.length?'Trecho excluído':'Último trecho excluído da composição');
 }
 function updateField(){
  if(selected<0)return;
