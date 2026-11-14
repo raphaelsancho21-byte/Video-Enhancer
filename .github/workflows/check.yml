@@ -11,7 +11,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Python syntax
-        run: python -m compileall -q app.py beat_detection.py tests
+        run: python -m compileall -q app.py beat_detection.py tiktok_integration.py tests
       - name: JavaScript syntax
         run: |
           for file in static/*.js; do node --check "$file"; done
