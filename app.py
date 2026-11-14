@@ -263,15 +263,23 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
                          f"setpts=(PTS-STARTPTS)/{speed:.5f},"
                          f"fps={base_fps:.4f},setsar=1")
                 t = c.get("transform")
-                if t:
+                identity = (
+                    not t or
+                    (abs(t["x"] - meta["width"] / 2) < 0.01
+                     and abs(t["y"] - meta["height"] / 2) < 0.01
+                     and abs(t["width"] - meta["width"]) < 0.01
+                     and abs(t["height"] - meta["height"]) < 0.01
+                     and abs(t["rotation"] % 360) < 0.00001)
+                )
+                if not identity:
                     w = max(2, int(round(t["width"] / 2) * 2))
                     h = max(2, int(round(t["height"] / 2) * 2))
-                    angle = t["rotation"] * math.pi / 180
-                    # Frame center is t.x/t.y in composition pixels. Rotation happens around
-                    # the scaled video's center; overlay positions the rotated bounds.
-                    chain += (f",scale={w}:{h}:flags=lanczos,format=rgba,"
-                              f"rotate={angle:.9f}:ow=rotw({angle:.9f}):oh=roth({angle:.9f}):c=none[foreground{i}]")
-                    graph.append(chain)
+                    angle = (t["rotation"] % 360) * math.pi / 180
+                    chain += f",scale={w}:{h}:flags=lanczos,format=rgba"
+                    if abs(angle) > 0.000001:
+                        chain += (f",rotate={angle:.9f}:ow=rotw({angle:.9f}):"
+                                  f"oh=roth({angle:.9f}):c=none")
+                    graph.append(chain + f"[foreground{i}]")
                     graph.append(f"color=c=black:s={comp_w}x{comp_h}:r={base_fps:.4f}:d={(end-start)/speed:.6f}[background{i}]")
                     x = t["x"] - comp_w / 2
                     y = t["y"] - comp_h / 2
