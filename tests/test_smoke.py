@@ -1,9 +1,11 @@
 """FFmpeg integration smoke test for the timeline compositor."""
 import json
+import sys
 import subprocess
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app import JOBS, process_edit
 
 
