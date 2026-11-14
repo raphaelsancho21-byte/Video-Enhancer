@@ -16,3 +16,10 @@ html,body{height:100%;width:100%;overflow:hidden}
 .playhead-knob{pointer-events:none}
 @media(max-width:850px){.studio{grid-template-rows:minmax(0,1fr) minmax(185px,37vh)}}
 @media(max-width:580px){.studio{grid-template-rows:minmax(0,1fr) minmax(180px,40vh)}}
+
+.clip .filmstrip{position:absolute;inset:0;opacity:.5;pointer-events:none;background-position:center;background-size:auto 100%;background-repeat:repeat-x;filter:saturate(.75)}
+.clip.selected .filmstrip{opacity:.7}
+.clip .clip-name,.clip .clip-duration{background:#121b33bd;padding:3px 5px;border-radius:3px;text-shadow:0 1px 2px #000}
+.center{flex-direction:column}
+.viewport{flex:1 1 0}
+.playercontrols{flex:0 0 56px}
