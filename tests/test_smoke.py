@@ -1,5 +1,6 @@
 """FFmpeg integration smoke test for the timeline compositor."""
 import json
+import shutil
 import sys
 import subprocess
 import tempfile
@@ -39,6 +40,25 @@ def main():
         duration = float(check.stdout.strip())
         assert 2.3 <= duration <= 2.8, duration
         print("SMOKE PASS: exported video with trim, gap, audio and canvas transform", duration)
+        # Second pass exercises the optional temporal effect in the real export
+        # path with a transformed clip and separate cut boundaries.
+        blur_source = temp / "blur_source.mp4"
+        blur_result = temp / "motion_blur.mp4"
+        subprocess.run([
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=128x72:rate=30:duration=3",
+            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100:duration=3",
+            "-c:v", "libx264", "-preset", "ultrafast",
+            "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(blur_source)
+        ], check=True)
+        key = "motion-blur-smoke"
+        JOBS[key] = {"id": key, "status": "queued", "stage": "queued", "progress": 0}
+        process_edit(key, blur_source, blur_result, segments, "off", "original",
+                     "original", False, None, None, "fast", "none", "medium")
+        if JOBS[key]["status"] != "done":
+            raise AssertionError(JOBS[key].get("error", JOBS[key]))
+        assert blur_result.exists() and blur_result.stat().st_size > 1024
+        print("SMOKE PASS: motion blur export works across two clips")
 
 
 if __name__ == "__main__":
