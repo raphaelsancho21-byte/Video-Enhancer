@@ -100,3 +100,36 @@ Abra o editor em `http://127.0.0.1:8000/editor`.
 - A correspondência prévia/exportação depende da renderização por navegador e FFmpeg; rotação, interpolação e arredondamento de pixels podem produzir diferenças subpixel.
 - Para pouca RAM, use vídeos curtos e evite interpolação 60 FPS com upscale 4K simultâneo.
 - Teste com `python tests/test_smoke.py` (requer dependências Python e FFmpeg).
+
+
+## TikTok HQ + conexão de conta (V1.5)
+
+No editor, selecione **Preset para plataforma → TikTok HQ · 9:16**. Isso define composição 1080×1920, H.264/AAC, CRF 19 com bitrate máximo de 10 Mb/s para vídeo normal e 16 Mb/s para o modo 60 FPS, com `+faststart`. Este preset **não impede a recompressão do TikTok** e não garante a mesma qualidade após publicação.
+
+### Conexão oficial (PC local)
+
+1. Registre um aplicativo no [TikTok for Developers](https://developers.tiktok.com/).
+2. Ative o **Login Kit** para **Desktop** e **Content Posting API**; solicite aprovação do escopo `video.upload` além de `user.info.basic`. A permissão pode depender de análise/aprovação do TikTok.
+3. Registre a URL de retorno **exatamente** como `http://127.0.0.1:8000/api/tiktok/callback` nas configurações de Login Kit para Desktop.
+4. No PowerShell, na pasta do projeto, defina as variáveis de ambiente **somente na sessão local**:
+   
+   ```powershell
+   $env:TIKTOK_CLIENT_KEY="SUA_CLIENT_KEY"
+   $env:TIKTOK_CLIENT_SECRET="SEU_CLIENT_SECRET"
+   python app.py
+   ```
+   
+   **Não adicione a chave secreta ao GitHub nem envie para o chat.**
+5. No editor, clique **Conectar TikTok**. Você será redirecionado para a tela de autorização oficial do TikTok; o login utiliza `state` anti-CSRF e PKCE S256 (hex).
+6. Exporte o vídeo normalmente. Quando terminar, clique **Enviar vídeo ao TikTok** e acompanhe o progresso.
+7. O arquivo vai para os **rascunhos / caixa de entrada** do TikTok por meio da Content Posting API com `video.upload`. Abra a notificação no aplicativo TikTok para concluir a publicação. O Video Enhancer **não publica automaticamente no perfil público**.
+
+### Privacidade e limitações
+
+- **Nunca digite sua senha do TikTok no Video Enhancer.** A autorização é feita no site oficial do TikTok.
+- O client secret deve ficar no servidor local. Tokens de acesso/renovação ficam **somente na memória do processo Python**, desaparecem ao reiniciar e não são escritos no projeto ou nos logs.
+- Para produção hospedada ou APK Android, é necessário migrar/adaptar o fluxo de OAuth e armazenamento seguro. A rota atual foi desenvolvida **apenas para o programa rodando em 127.0.0.1:8000 no PC**; não exponha o servidor à Internet.
+- O TikTok pode limitar o uso da Content Posting API a apps aprovados e restringir uploads. O usuário precisa consentir explicitamente com o envio.
+- Enviar um rascunho não é o mesmo que publicar o vídeo. Postagem direta ao perfil exige `video.publish`, consulta de Creator Info, confirmação de privacidade e revisão adicional da aplicação.
+- Uma configuração sem Client Key/Secret permite exportar TikTok HQ normalmente, mas o botão de conexão informa que é necessária a integração oficial.
+- O tamanho e a duração máximos do envio também dependem dos limites oficiais da API e da conta.
