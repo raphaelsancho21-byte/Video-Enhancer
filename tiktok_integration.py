@@ -31,6 +31,15 @@ LOCK = threading.RLock()
 PENDING: dict[str, dict] = {}
 SESSIONS: dict[str, dict] = {}
 UPLOADS: dict[str, dict] = {}
+RENDER_JOBS = None
+RENDER_LOCK = None
+RENDER_OUTPUTS = None
+
+def configure(jobs, lock, outputs):
+    global RENDER_JOBS, RENDER_LOCK, RENDER_OUTPUTS
+    RENDER_JOBS = jobs
+    RENDER_LOCK = lock
+    RENDER_OUTPUTS = outputs
 
 
 def _session(req: Request) -> str:
@@ -225,12 +234,13 @@ def share(job_id: str, request: Request):
     if origin and origin not in {"http://127.0.0.1:8000", "http://localhost:8000"}:
         raise HTTPException(403, "Origem não autorizada")
     token = _token(sid)
-    from app import OUTPUTS as RENDERED, JOBS, JOBS_LOCK
-    with JOBS_LOCK:
-        job = JOBS.get(job_id)
+    if RENDER_JOBS is None:
+        raise HTTPException(503, "Serviço de exportação indisponível")
+    with RENDER_LOCK:
+        job = RENDER_JOBS.get(job_id)
         if not job or job.get("status") != "done":
             raise HTTPException(404, "Exporte primeiro o vídeo no editor.")
-    path = RENDERED / f"{job_id}.mp4"
+    path = RENDER_OUTPUTS / f"{job_id}.mp4"
     if not path.is_file():
         raise HTTPException(404, "Vídeo exportado não encontrado.")
     task_id = secrets.token_hex(16)
