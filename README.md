@@ -168,3 +168,13 @@ No editor principal (`/editor`), importe primeiro seu vídeo e clique em **Impor
 O MP3 é copiado para o armazenamento local do servidor em `data/audio/` (máximo de 256 MB por arquivo). O projeto JSON armazena a referência a esse áudio, não embute o arquivo. Caso mova o projeto para outro PC, é preciso levar a mídia junto. Atualmente existe uma única faixa de áudio A1 no editor principal, e a exportação usa a música da faixa A1 no lugar do áudio original do vídeo (não mistura os dois). O áudio que excede a duração do vídeo é cortado no final da exportação.
 
 A opção separada **Analisar batidas de outro arquivo** apenas analisa música sem adicioná-la à timeline.
+
+
+## Áudio separado V1/A1 e marcador manual M (V1.10)
+
+- Marque **Remover som original do vídeo (V1)** para silenciar o áudio da gravação, preservando a música MP3 importada na faixa A1. Isso funciona tanto na reprodução quanto na exportação.
+- A faixa **A1** continua tendo mute próprio. Se nenhuma das faixas estiver mutada, o FFmpeg mistura V1 + A1 no resultado. **Sem nenhum áudio na exportação** silencia ambas.
+- Pressione **M** com o editor em foco, mesmo durante a reprodução, para adicionar imediatamente um marcador na posição exata da timeline (quantizada ao FPS da composição). O botão **＋ Marcador (M)** faz o mesmo. Os marcadores podem ser arrastados e removidos com duplo clique. Ao digitar em campos de texto, o atalho é ignorado.
+- Marcadores automáticos e visualização da forma de onda passam a seguir o deslocamento da música MP3 quando ela é arrastada na faixa A1. A reprodução sincroniza a faixa externa com a timeline mais frequentemente para reduzir o desvio percebido.
+
+Se as batidas automáticas ainda estiverem erradas para alguma música, prefira gravar marcadores manuais com M enquanto ouve; a precisão da análise automática varia com ritmo e gênero musical.
