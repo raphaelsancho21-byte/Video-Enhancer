@@ -161,6 +161,14 @@ function appendExport(form){form.append('video_overlays',JSON.stringify(state.la
  id:c.id,at:c.at,start:c.start,end:c.end,x:c.x,y:c.y,
  scale:c.scale,opacity:c.opacity,hidden:c.hidden
 }))))}
+// Tabs navigate only to real, implemented panels.
+for(const button of document.querySelectorAll('.editor-tabs button[data-panel-target]')){
+ button.addEventListener('click',()=>{
+  document.querySelectorAll('.editor-tabs button').forEach(x=>x.classList.toggle('tab-active',x===button));
+  const target=$(button.dataset.panelTarget);
+  target?.scrollIntoView({block:'start',behavior:'smooth'});
+ });
+}
 window.VideoEnhancerLayers={render,reset,clearSelection,serialize,restore,appendExport,sync};
 setInterval(()=>sync(),75);
 render();
