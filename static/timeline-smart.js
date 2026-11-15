@@ -194,15 +194,24 @@ $('detectBeats').addEventListener('click',async()=>{
  }catch(e){$('beatInfo').textContent='Falha: '+e.message}
  finally{$('detectBeats').disabled=false}
 });
-$('addBeatMarker').addEventListener('click',()=>{S.manual.push(round(get().cursor(),frames()));S.manual.sort((a,b)=>a-b);visualize()});
-window.TimelineSmart={bindClip,snap,normalize,insertAfter,deleteAt,visualize,clearGuide,
+function addMarker(){
+ const bridge=get();if(!bridge?.file())return;
+ // Timestamp from the playing media, not the last timeupdate event.
+ const now=bridge.accurateCursor?.()??bridge.cursor();
+ const timestamp=round(clamp(now,0,bridge.total()),frames());
+ if(S.manual.some(t=>Math.abs(t-timestamp)<.5/frames()))return;
+ S.manual.push(timestamp);S.manual.sort((a,b)=>a-b);visualize();
+ $('beatInfo').textContent='Marcador M adicionado em '+timestamp.toFixed(3)+' s';
+}
+$('addBeatMarker').addEventListener('click',addMarker);
+window.TimelineSmart={bindClip,snap,normalize,insertAfter,deleteAt,visualize,clearGuide,addMarker,
  useProjectAudio(){
-  S.music=null;$('beatFile').value='';
-  S.beats=[];S.baseBeats=[];S.waveform=[];S.analyzed=null;
+  S.music=null;$('beatFile').value='';S.beatOffset=0;
+  S.beats=[];S.baseBeats=[];S.waveform=[];S.analyzed=null;S.beatOffset=0;
   visualize();
  },
  clearProjectBeats(){
   S.beats=[];S.baseBeats=[];S.waveform=[];S.analyzed=null;
   visualize();
- },get ripple(){return S.ripple},get manual(){return S.manual},loadMarkers(value){S.manual=Array.isArray(value)?value.filter(Number.isFinite).slice(0,200):[];visualize()},get detected(){return S.beats},shiftDetected(at){if(!S.baseBeats)return;S.beats=S.baseBeats.map(t=>round(t+at,frames()));visualize()},ready(){visualize();$('detectBeats').disabled=!get()?.file()}};
+ },get ripple(){return S.ripple},get manual(){return S.manual},loadMarkers(value){S.manual=Array.isArray(value)?value.filter(Number.isFinite).slice(0,200):[];visualize()},get detected(){return S.beats},shiftDetected(at){if(!S.baseBeats)return;S.beatOffset=at;S.beats=S.baseBeats.map(t=>round(t+at,frames()));visualize()},ready(){visualize();$('detectBeats').disabled=!get()?.file()}};
 })();
