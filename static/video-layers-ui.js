@@ -54,7 +54,8 @@ function renderTimeline(){
    const ox=e.clientX,start=c.at,moved=0;
    clip.setPointerCapture(e.pointerId);
    const move=ev=>{
-    moved=ev.clientX-ox;c.at=Math.round(clamp(start+moved/scale,0,86400)*30)/30;
+    moved=ev.clientX-ox;const fps=bridge()?.fps()||30;
+    c.at=Math.round(clamp(start+moved/scale,0,Math.max(0,(bridge()?.total()||86400)-(c.end-c.start)))*fps)/fps;
     clip.style.left=c.at*scale+'px';renderInspector();sync(true);
    };
    const finish=()=>{clip.removeEventListener('pointermove',move);clip.removeEventListener('pointerup',finish);clip.removeEventListener('pointercancel',finish);render()};
@@ -63,7 +64,8 @@ function renderTimeline(){
   body.appendChild(clip);row.append(label,body);trackRoot.appendChild(row);
  });
  const stage=$('timelineStage');
- stage.style.minHeight=Math.max(180,195+state.layers.length*64+($('audioTrack').hidden?0:64))+'px';
+ const height=Math.max(180,195+state.layers.length*64+($('audioTrack').hidden?0:64));
+ stage.style.minHeight=height+'px';$('playhead').style.height=height+'px';
 }
 function select(id){state.selected=id;render();}
 function render(){
@@ -87,7 +89,7 @@ function sync(force=false){
     host.setPointerCapture(e.pointerId);
     const move=ev=>{layer.x=clamp(ox+(ev.clientX-sx)/Math.max(1,bounds.width-layer.scale*bounds.width),0,1);
       layer.y=clamp(oy+(ev.clientY-sy)/Math.max(1,bounds.height-host.clientHeight),0,1);position(layer,host);renderInspector()};
-    const stop=()=>{host.removeEventListener('pointermove',move);host.removeEventListener('pointerup',stop);host.removeEventListener('pointercancel',stop)};
+    const stop=()=>{render();host.removeEventListener('pointermove',move);host.removeEventListener('pointerup',stop);host.removeEventListener('pointercancel',stop)};
     host.addEventListener('pointermove',move);host.addEventListener('pointerup',stop);host.addEventListener('pointercancel',stop);
    });
    canvas.appendChild(host);
@@ -134,10 +136,11 @@ async function importLayer(file){
 }
 $('importLayerFile').addEventListener('change',e=>{const file=e.target.files?.[0];e.target.value='';importLayer(file)});
 for(const [key,id] of Object.entries(fields)){
- $(id).addEventListener('input',()=>{
+ $(id).addEventListener(['at','start','end'].includes(key)?'change':'input',()=>{
   const c=active();if(!c)return;const val=Number($(id).value);
   if(!Number.isFinite(val))return;
   c[key]=['scale','opacity','x','y'].includes(key)?clamp(val/100,key==='scale'?.1:0,1):Math.max(0,val);
+  if(key==='at')c.at=Math.min(c.at,Math.max(0,(bridge()?.total()||c.at+c.end-c.start)-(c.end-c.start)));
   if(c.start>c.duration-.08)c.start=Math.max(0,c.duration-.08);
   if(c.end<=c.start)c.end=c.start+.08;
   if(c.end>c.duration)c.end=Math.max(c.start+.08,c.duration);
