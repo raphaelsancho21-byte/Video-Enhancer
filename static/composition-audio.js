@@ -99,10 +99,37 @@ function clock(){if(state.asset)syncPlayback()}
 function loadAsset(data,restore=false){
  audio.pause();audio.src=data.url;audio.load();state.asset=data;
  state.at=restore?state.at:0;state.muted=false;state.volume=1;state.analysis=null;
+ // The A1 track is the project's selected soundtrack. Do not double-play
+ // the source video's audio while this soundtrack is enabled.
  video.muted=true;
  audio.addEventListener('loadedmetadata',()=>{update()}, {once:true});
  update();
 }
+$('importAudioFile').addEventListener('change',async e=>{
+ const music=e.target.files?.[0];e.target.value='';
+ if(!music)return;
+ if(!/\.mp3$/i.test(music.name)){
+  announce('Selecione um arquivo MP3.');return;
+ }
+ if(!bridge()?.file()){
+  announce('Importe primeiro o vídeo do projeto, depois adicione seu MP3.');return;
+ }
+ if(music.size>256*1024*1024){
+  announce('O limite é 256 MB por MP3.');return;
+ }
+ announce('Importando '+music.name+' para a faixa A1…');
+ try{
+  const form=new FormData();form.append('file',music);
+  const response=await fetch('/api/editor/import-audio',{method:'POST',body:form});
+  const data=await response.json();
+  if(!response.ok)throw Error(data.detail||'Não foi possível importar o MP3');
+  loadAsset(data);
+  window.TimelineSmart?.useProjectAudio?.();
+  $('detectBeats').disabled=false;
+  bridge()?.render();
+  announce(music.name+' entrou na faixa A1! Você pode mover, mutar e detectar batidas.');
+ }catch(err){announce('Erro ao importar MP3: '+err.message)}
+});
 $('extractAudio').addEventListener('click',async()=>{
  const file=bridge()?.file();if(!file)return;
  const btn=$('extractAudio');btn.disabled=true;btn.textContent='Extraindo áudio...';announce('Extraindo no servidor; nenhum download será iniciado.');
@@ -118,7 +145,7 @@ $('extractAudio').addEventListener('click',async()=>{
 });
 $('audioMuteBtn').addEventListener('click',()=>{state.muted=!state.muted;update()});
 $('audioVolume').addEventListener('input',()=>{state.volume=Number($('audioVolume').value)/100;audio.volume=Math.min(1,state.volume)});
-$('removeAudio').addEventListener('click',()=>{state.asset=null;state.analysis=null;audio.pause();audio.removeAttribute('src');audio.load();video.muted=false;announce('Áudio removido da faixa A1.');update();bridge()?.render()});
+$('removeAudio').addEventListener('click',()=>{state.asset=null;state.analysis=null;audio.pause();audio.removeAttribute('src');audio.load();video.muted=false;window.TimelineSmart?.clearProjectBeats?.();announce('Áudio removido da faixa A1.');update();bridge()?.render()});
 audio.addEventListener('loadedmetadata',update);
 $('zoom').addEventListener('input',update);
 $('audioClip').addEventListener('pointerdown',e=>{
@@ -158,6 +185,7 @@ function restore(data){
   loadAsset(setting,true);
   state.volume=clamp(Number(setting.volume??1),0,2);
   state.muted=!!setting.muted;update();
+  window.TimelineSmart?.useProjectAudio?.();
   announce('Áudio do projeto restaurado (se o arquivo local ainda existir).');
  }
 }
