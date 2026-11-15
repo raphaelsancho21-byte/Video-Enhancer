@@ -90,18 +90,22 @@ function syncPlayback(){
  const playhead=bridge()?.cursor()||0;
  const shouldPlay=bridge()?.playing()&&playhead>=state.at&&playhead<state.at+audio.duration&&!state.muted;
  const position=clamp(playhead-state.at,0,Math.max(0,(audio.duration||0)-.001));
- if(Math.abs(audio.currentTime-position)>.19){try{audio.currentTime=position}catch{}}
+ if(Math.abs(audio.currentTime-position)>.055){try{audio.currentTime=position}catch{}}
  audio.volume=clamp(state.volume,0,1);
  if(shouldPlay&&audio.paused){audio.play().catch(()=>{})}
  if(!shouldPlay&&!audio.paused)audio.pause();
 }
 function clock(){if(state.asset)syncPlayback()}
+function updateAudioMute(){
+ video.muted=!!$('muteSourceAudio').checked||!!(state.asset&&!state.muted);
+}
+$('muteSourceAudio').addEventListener('change',updateAudioMute);
 function loadAsset(data,restore=false){
  audio.pause();audio.src=data.url;audio.load();state.asset=data;
  state.at=restore?state.at:0;state.muted=false;state.volume=1;state.analysis=null;
  // The A1 track is the project's selected soundtrack. Do not double-play
  // the source video's audio while this soundtrack is enabled.
- video.muted=true;
+ updateAudioMute();
  audio.addEventListener('loadedmetadata',()=>{update()}, {once:true});
  update();
 }
@@ -143,9 +147,9 @@ $('extractAudio').addEventListener('click',async()=>{
  }catch(err){announce('Erro: '+err.message)}
  finally{btn.disabled=!bridge()?.file();btn.textContent='♫ Extrair áudio para o projeto'}
 });
-$('audioMuteBtn').addEventListener('click',()=>{state.muted=!state.muted;update()});
+$('audioMuteBtn').addEventListener('click',()=>{state.muted=!state.muted;updateAudioMute();update()});
 $('audioVolume').addEventListener('input',()=>{state.volume=Number($('audioVolume').value)/100;audio.volume=Math.min(1,state.volume)});
-$('removeAudio').addEventListener('click',()=>{state.asset=null;state.analysis=null;audio.pause();audio.removeAttribute('src');audio.load();video.muted=false;window.TimelineSmart?.clearProjectBeats?.();announce('Áudio removido da faixa A1.');update();bridge()?.render()});
+$('removeAudio').addEventListener('click',()=>{state.asset=null;state.analysis=null;audio.pause();audio.removeAttribute('src');audio.load();updateAudioMute();window.TimelineSmart?.clearProjectBeats?.();announce('Áudio removido da faixa A1.');update();bridge()?.render()});
 audio.addEventListener('loadedmetadata',update);
 $('zoom').addEventListener('input',update);
 $('audioClip').addEventListener('pointerdown',e=>{
@@ -165,7 +169,7 @@ $('audioClip').addEventListener('pointerup',e=>{if(state.drag?.id===e.pointerId)
 $('audioClip').addEventListener('pointercancel',()=>state.drag=null);
 function resetForMedia(){
  state.asset=null;state.analysis=null;state.at=0;state.volume=1;state.muted=false;
- audio.pause();audio.removeAttribute('src');audio.load();video.muted=false;
+ audio.pause();audio.removeAttribute('src');audio.load();updateAudioMute();
  state.fps=30;update();
 }
 function serialize(){
@@ -184,7 +188,7 @@ function restore(data){
   state.at=Number(setting.at)||0;
   loadAsset(setting,true);
   state.volume=clamp(Number(setting.volume??1),0,2);
-  state.muted=!!setting.muted;update();
+  state.muted=!!setting.muted;updateAudioMute();update();
   window.TimelineSmart?.useProjectAudio?.();
   announce('Áudio do projeto restaurado (se o arquivo local ainda existir).');
  }
@@ -194,11 +198,12 @@ function appendExport(form){
  if(state.asset&&!state.muted&&!$('muteExport').checked){
   form.append('extracted_audio',JSON.stringify({id:state.asset.id,at:state.at,volume:state.volume}));
  }
- if(state.asset&&state.muted)form.set('mute','true');
+ // Muting A1 only suppresses A1; it must not silence V1.
+
 }
 window.VideoEnhancerProjectMedia={initialize:initSize,resetForMedia,serialize,restore,appendExport,update,
- getAudio:()=>state.asset,getAudioAt:()=>state.at,
+ getAudio:()=>state.asset,getAudioAt:()=>state.at,updateAudioMute,
  acceptAnalysis:analysis=>{state.analysis=analysis;waveform()},getComposition:()=>({width:state.width,height:state.height,fps:state.fps})};
 window.addEventListener('video-enhancer-timeline-update',update);
-setInterval(clock,80);
+setInterval(clock,35);
 })();
