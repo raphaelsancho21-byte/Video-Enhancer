@@ -147,7 +147,9 @@ function renderSelection(){
 }
 function applySetting(f){const c=selectedClip();if(!c||c.kind!=='base')return;snapshot();const t=c.transform||(c.transform=defaultTransform());f(t,c);applyTransform(t);render();updateInspector()}
 const config=['scaleX','scaleY','rotation','posX','posY'];
-for(const id of config)$(id).addEventListener(['posX','posY'].includes(id)?'change':'input',()=>{
+for(const id of config){
+ $(id).addEventListener('pointerdown',()=>{if(selectedClip()?.kind==='base')snapshot()});
+ $(id).addEventListener(['posX','posY'].includes(id)?'change':'input',()=>{
  const c=selectedClip();if(!c||c.kind!=='base')return;
  const t=c.transform||(c.transform=defaultTransform());const n=Number($(id).value);if(!Number.isFinite(n))return;
  if(id==='scaleX')t.width=state.sourceWidth*n/100;
@@ -156,7 +158,7 @@ for(const id of config)$(id).addEventListener(['posX','posY'].includes(id)?'chan
  if(id==='posX')t.x=state.width/2+n;
  if(id==='posY')t.y=state.height/2+n;
  applyTransform(t);updateInspector();
-});
+});}
 for(const [id,key] of [['overlayScale','scale'],['overlayOpacity','opacity']]){
  $(id).addEventListener('input',()=>{const c=selectedClip();if(!c||c.kind!=='overlay')return;c[key]=Number($(id).value)/100;$(id+'Value').textContent=$(id).value+'%';syncOverlays()});
  $(id).addEventListener('change',()=>{render()});
@@ -196,7 +198,7 @@ function primaryRange(c,at){
  const neighbors=state.clips.filter(x=>x.id!==c.id).sort((a,b)=>a.at-b.at);
  const left=neighbors.filter(x=>endAt(x)<=c.at+.001).at(-1);
  const right=neighbors.find(x=>x.at>=endAt(c)-.001);
- return clamp(at,left?endAt(left):0,right?Math.max(left?endAt(left):0,right.at-duration(c)):Math.max(0,total()-duration(c)));
+ return clamp(at,left?endAt(left):0,right?Math.max(left?endAt(left):0,right.at-duration(c)):86400);
 }
 function clipNode(c,kind){const item=document.createElement('div');item.className='clip '+(kind==='overlay'?'overlay-clip':'')+(kind==='audio'?' audio-clip':'')+(c.id===state.selected?' active':'');
  item.dataset.id=c.id;item.style.left=c.at*state.zoom+'px';item.style.width=Math.max(8,(kind==='audio'?c.end-c.start:duration(c))*state.zoom)+'px';
