@@ -50,7 +50,7 @@ function renderTimeline(){
   clip.textContent=c.name;clip.title='Arraste para mover a camada na timeline';
   clip.addEventListener('click',e=>{e.stopPropagation();select(c.id)});
   clip.addEventListener('pointerdown',e=>{
-   if(e.button!==0)return;e.preventDefault();e.stopPropagation();select(c.id);
+   if(e.button!==0)return;e.preventDefault();e.stopPropagation();state.selected=c.id;renderInspector();
    const ox=e.clientX,start=c.at,moved=0;
    clip.setPointerCapture(e.pointerId);
    const move=ev=>{
@@ -82,7 +82,7 @@ function sync(force=false){
    video.addEventListener('error',()=>{host.title='A prévia deste codec não é suportada pelo navegador; o FFmpeg ainda pode exportar.'});
    host.appendChild(video);
    host.addEventListener('pointerdown',e=>{
-    if(e.button!==0)return;select(layer.id);
+    if(e.button!==0)return;state.selected=layer.id;renderInspector();
     e.preventDefault();e.stopPropagation();const bounds=canvas.getBoundingClientRect(),sx=e.clientX,sy=e.clientY,ox=layer.x,oy=layer.y;
     host.setPointerCapture(e.pointerId);
     const move=ev=>{layer.x=clamp(ox+(ev.clientX-sx)/Math.max(1,bounds.width-layer.scale*bounds.width),0,1);
@@ -112,7 +112,7 @@ function position(c,host){
  const ratio=c.height/c.width;
  host.style.aspectRatio=c.width+'/'+c.height;
  host.style.left=(c.x*(1-c.scale)*100)+'%';
- host.style.top='calc('+Math.round(c.y*100)+'% - '+Math.round(c.y*c.scale*ratio*100)+'cqw)';
+ host.style.top=(c.y*Math.max(0,canvas.clientHeight-canvas.clientWidth*c.scale*ratio))+'px';
  host.style.opacity=String(c.opacity);
 }
 async function importLayer(file){
@@ -126,7 +126,7 @@ async function importLayer(file){
   const res=await fetch('/api/editor/layers/upload',{method:'POST',body:form});
   const data=await res.json();if(!res.ok)throw Error(data.detail||'Falha ao importar camada');
   const duration=Math.min(data.duration,Math.max(.08,(bridge()?.total()||data.duration)-(bridge()?.cursor()||0)));
-  const layer={id:data.id,name:data.name,url:data.url,width:data.width,height:data.height,
+  const layer={id:data.id,name:data.name,url:data.url,width:data.width,height:data.height,duration:data.duration,
    at:Math.max(0,bridge()?.cursor()||0),start:0,end:duration,scale:.45,opacity:1,x:.5,y:.5,hidden:false};
   state.layers.push(layer);state.selected=layer.id;render();
  }catch(err){alert('Falha ao importar sobreposição: '+err.message)}
@@ -138,8 +138,9 @@ for(const [key,id] of Object.entries(fields)){
   const c=active();if(!c)return;const val=Number($(id).value);
   if(!Number.isFinite(val))return;
   c[key]=['scale','opacity','x','y'].includes(key)?clamp(val/100,key==='scale'?.1:0,1):Math.max(0,val);
+  if(c.start>c.duration-.08)c.start=Math.max(0,c.duration-.08);
   if(c.end<=c.start)c.end=c.start+.08;
-  if(c.end>c.duration)c.end=Math.max(c.start+.08,c.duration||c.end);
+  if(c.end>c.duration)c.end=Math.max(c.start+.08,c.duration);
   render();
  });
 }
@@ -148,7 +149,7 @@ $('layerDelete').addEventListener('click',()=>{state.layers=state.layers.filter(
 function reset(){state.layers=[];state.selected=null;render()}
 function serialize(){return state.layers.map(c=>({...c}))}
 function restore(project){
- state.layers=Array.isArray(project?.videoLayers)?project.videoLayers.slice(0,4).filter(c=>c&&typeof c.id==='string'&&typeof c.url==='string').map(c=>({...c,hidden:!!c.hidden})):[];
+ state.layers=Array.isArray(project?.videoLayers)?project.videoLayers.slice(0,4).filter(c=>c&&typeof c.id==='string'&&/^\/api\/editor\/layers\/media\/[a-f0-9]{32}$/.test(c.url)).map(c=>({...c,hidden:!!c.hidden})):[];
  state.selected=state.layers.at(-1)?.id||null;render();
 }
 function appendExport(form){form.append('video_overlays',JSON.stringify(state.layers.map(c=>({
