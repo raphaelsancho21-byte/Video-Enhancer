@@ -162,3 +162,8 @@ body{background:var(--editor-bg)}
 
 /* Prevent overlapping V1 and overlay inspector controls. */
 .inspector.layer-selected #clipInspector,.inspector.layer-selected #noSelection{display:none!important}
+
+.editor-tabs>button{background:transparent;border:0;border-right:1px solid #252b36;font-size:11px;color:#9aa5b7;padding:13px 19px;font-weight:600;cursor:pointer}
+.editor-tabs>button:hover{color:#fff;background:#242c3c}
+.editor-tabs>button.tab-active{color:#e7ecff;border-bottom:2px solid #84a9fa;background:#202734}
+.editor-tabs>span:not(.tab-tip){font-size:10px;color:#6c788e;font-style:italic;cursor:default}
