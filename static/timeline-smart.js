@@ -149,11 +149,12 @@ function visualize(){
  canvas.style.width=(length*p)+'px';
  const ctx=canvas.getContext('2d');ctx.clearRect(0,0,width,height);
  const samples=S.waveform;if(samples.length){
-  const scaleX=width/Math.max(1,length);
+  const scaleX=width/Math.max(.001,length);
+  const offset=S.music?0:S.beatOffset;
   ctx.fillStyle='rgba(103,141,242,.65)';
   for(let i=0;i<samples.length;i++){
-   const t=i/S.waveform.length*S.analyzed.duration,x=Math.round(t*scaleX);
-   if(x>=width)break;
+   const t=offset+i/samples.length*S.analyzed.duration,x=Math.round(t*scaleX);
+   if(x<0)continue;if(x>=width)break;
    const h=Math.min(16,samples[i]*34);ctx.fillRect(x,17-h,1,h*2);
   }
  }
@@ -186,6 +187,7 @@ $('detectBeats').addEventListener('click',async()=>{
   else{const form=new FormData();form.append('file',file);response=await fetch('/api/editor/beats',{method:'POST',body:form})}
   const info=await response.json();if(!response.ok)throw Error(info.detail||'Falha na análise');
   S.baseBeats=info.beats||[];S.beatOffset=asset&&!S.music?(window.VideoEnhancerProjectMedia?.getAudioAt()||0):0;
+  S.analyzed={duration:info.duration};
   S.beats=S.baseBeats.map(t=>round(t+S.beatOffset,frames()));
   S.waveform=info.waveform||[];S.analyzed={duration:info.duration};
   if(asset&&!S.music)window.VideoEnhancerProjectMedia?.acceptAnalysis(info);
