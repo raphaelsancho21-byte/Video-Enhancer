@@ -154,3 +154,8 @@ Inspirado na interface de ajuste do CapCut, com controles:
 O filtro FFmpeg executa uma combinação temporal de quadros com `tmix`, `blend`, `setpts` e `tpad` em cada trecho isolado (sem ghosting de um corte no próximo). A direção futura usa ajuste de timestamps, evitando o filtro `reverse`, que armazenaria todo o trecho na memória. Esse efeito **não é motion blur por vetores de movimento** e não será idêntico ao algoritmo do CapCut. A prévia de vídeo permanece original; o efeito aparece ao exportar.
 
 **Custo**: para 1080p, comece com Desfocar 55, Misturar 65, Ambos e 2 vezes. O máximo (100/100, Ambos, 6 vezes) pode exigir mais RAM e tempo para exportar, principalmente em 4K.
+
+
+### Motion Blur com estimativa de movimento (V1.8)
+
+**Novo padrão:** Fluxo de movimento, opção acima dos controles de Desfocar/Misturar. O motor usa o filtro FFmpeg `minterpolate` em modo `mci` (compensação de movimento), gera até 4 subframes por quadro e acumula uma exposição curta com `tmix` antes de retornar à taxa FPS da composição. Mantém a mistura antiga em uma opção separada. Esse método evita os rastros mais óbvios de cópias de frames, mas não replica o algoritmo proprietário do CapCut, pode introduzir artefatos em oclusões/cortes rápidos e custa muito mais CPU. O efeito é aplicado separadamente a cada clipe. A prévia continua sem esse efeito.
