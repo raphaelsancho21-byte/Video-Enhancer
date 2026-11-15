@@ -243,14 +243,15 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
                  export_mode: str = "fast", platform_preset: str = "none",
                  motion_blur: str = "off", blur_amount: int = 70,
                  blur_mix: int = 70, blur_direction: str = "both",
-                 blur_times: int = 2, blur_algorithm: str = "flow"):
+                 blur_times: int = 2, blur_algorithm: str = "flow",
+                 mute_source_audio: bool = False):
     with PROCESS_LOCK:
         with JOBS_LOCK:
             JOBS[job_id].update(status="processing", stage="Renderizando edição")
         try:
             duration = max((c.get("at", 0) + (c["end"] - c["start"]) / c["speed"] for c in segments), default=0)
             separate_audio = bool(extracted_audio and not muted)
-            has_audio = probe_audio(source) and not muted and not separate_audio
+            has_audio = probe_audio(source) and not muted and not mute_source_audio
             import math
             meta = probe_video(source)
             comp_w = int(composition["width"]) if composition else int(meta["width"]) // 2 * 2
@@ -372,29 +373,35 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
             cmd = [find_binary("ffmpeg"), "-hide_banner", "-nostdin", "-y",
                    "-i", str(source), "-filter_complex", ";".join(graph),
                    "-map", video_map]
-            if has_audio:
-                cmd += ["-map", "[aout]"]
             if separate_audio:
-                # Audio is a distinct media track with an independent timeline start.
                 audio_path = AUDIO / (extracted_audio["id"] + ".mp3")
                 if not audio_path.is_file():
-                    raise RuntimeError("Áudio extraído ausente. Extraia novamente antes de exportar.")
+                    raise RuntimeError("Música A1 não encontrada. Importe novamente o MP3.")
                 offset = float(extracted_audio["at"])
                 volume = float(extracted_audio["volume"])
-                # Add input, then mix a delayed/trimmed audio track to the video end.
-                # Zero-based input #1 refers to the extracted audio, not the source.
-                cmd += ["-i", str(audio_path)]
-                audio_graph = (f"[1:a:0]atrim=duration={max(0.,duration-offset):.6f},"
-                               f"asetpts=PTS-STARTPTS,volume={volume:.4f},"
-                               f"adelay={int(round(offset*1000))}:all=1,"
-                               f"apad=whole_dur={duration:.6f},"
-                               f"atrim=duration={duration:.6f}[external_audio]")
-                # Extend the existing filtergraph to produce one synchronized output.
+                # A1 is independent from V1. A muted V1 can still export A1;
+                # when both are enabled mix them together, not replace either.
+                audio_graph = (
+                    f"[1:a:0]atrim=duration={max(0., duration-offset):.6f},"
+                    f"asetpts=PTS-STARTPTS,volume={volume:.4f},"
+                    f"adelay={int(round(offset*1000))}:all=1,"
+                    f"apad=whole_dur={duration:.6f},"
+                    f"atrim=duration={duration:.6f}[external_audio]"
+                )
                 graph.append(audio_graph)
+                audio_map = "[external_audio]"
+                if has_audio:
+                    graph.append(
+                        "[aout][external_audio]amix=inputs=2:duration=longest:"
+                        "dropout_transition=0:normalize=0,alimiter=limit=0.95[mixed_audio]"
+                    )
+                    audio_map = "[mixed_audio]"
                 cmd = [find_binary("ffmpeg"), "-hide_banner", "-nostdin", "-y",
                        "-i", str(source), "-i", str(audio_path),
                        "-filter_complex", ";".join(graph), "-map", video_map,
-                       "-map", "[external_audio]"]
+                       "-map", audio_map]
+            elif has_audio:
+                cmd += ["-map", "[aout]"]
             codec_preset = "veryfast" if platform_preset == "tiktok_hq" else ("ultrafast" if export_mode == "fast" else "veryfast")
             codec_crf = "19" if platform_preset == "tiktok_hq" else ("21" if export_mode == "fast" else "19")
             cmd += ["-c:v", "libx264", "-preset", codec_preset, "-crf", codec_crf,
@@ -452,7 +459,8 @@ async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
                         motion_blur: str = Form("off"),
                         blur_amount: int = Form(70), blur_mix: int = Form(70),
                         blur_direction: str = Form("both"),
-                        blur_times: int = Form(2), blur_algorithm: str = Form("flow")):
+                        blur_times: int = Form(2), blur_algorithm: str = Form("flow"),
+                        mute_source_audio: bool = Form(False)):
     import math
     if blur_algorithm not in {"flow", "blend"}:
         raise HTTPException(400, "Algoritmo de Motion Blur inválido")
@@ -556,7 +564,7 @@ async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
         JOBS[job_id] = {"id": job_id, "status": "queued", "stage": "Aguardando exportação",
                         "progress": 0, "error": None, "download": None, "created": time.time()}
     threading.Thread(target=process_edit,
-                     args=(job_id, source, destination, segments, quality, resolution, fps, mute, comp, audio_setting, export_mode, platform_preset, motion_blur, blur_amount, blur_mix, blur_direction, blur_times, blur_algorithm),
+                     args=(job_id, source, destination, segments, quality, resolution, fps, mute, comp, audio_setting, export_mode, platform_preset, motion_blur, blur_amount, blur_mix, blur_direction, blur_times, blur_algorithm, mute_source_audio),
                      daemon=True).start()
     return {"id": job_id}
 
