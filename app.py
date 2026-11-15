@@ -563,6 +563,38 @@ async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
 
 
 
+@app.post("/api/editor/import-audio")
+async def import_project_mp3(file: UploadFile = File(...)):
+    """Import an independent MP3 music track into this local editing project."""
+    ext = Path(file.filename or "").suffix.lower()
+    if ext != ".mp3":
+        raise HTTPException(400, "Selecione um arquivo MP3 (.mp3)")
+    try:
+        find_binary("ffprobe")
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    asset_id = uuid.uuid4().hex
+    destination = AUDIO / (asset_id + ".mp3")
+    received = 0
+    try:
+        with destination.open("wb") as out:
+            while chunk := await file.read(1024 * 1024):
+                received += len(chunk)
+                if received > 256 * 1024 * 1024:
+                    raise HTTPException(413, "MP3 muito grande (máximo de 256 MB)")
+                out.write(chunk)
+        if not received or not await asyncio.to_thread(probe_audio, destination):
+            raise HTTPException(400, "Não foi possível ler o áudio desse MP3")
+        return {"id": asset_id, "url": f"/api/editor/audio/{asset_id}",
+                "name": (file.filename or "Música.mp3"), "size": received,
+                "kind": "imported_mp3"}
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
+    finally:
+        await file.close()
+
+
 @app.post("/api/editor/extract-audio")
 async def extract_project_audio(file: UploadFile = File(...)):
     """Extract audio to a project-local asset. Nothing is downloaded to the browser."""
