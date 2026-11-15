@@ -13,7 +13,7 @@ const renderValue=(id,v)=>$(id).value=String(v);
 function safeTime(t){return Math.max(0,Number(t)||0)}
 function renderInspector(){
  const c=active();$('overlayInspector').hidden=!c;
- $('inspectorLayerMode').hidden=!c;
+ document.querySelector('.inspector')?.classList.toggle('layer-selected',!!c);
  if(!c)return;
  $('layerSelectionName').textContent=c.name;
  for(const [key,id] of Object.entries(fields)){
@@ -151,7 +151,7 @@ for(const [key,id] of Object.entries(fields)){
 $('layerToggleVisibility').addEventListener('click',()=>{const c=active();if(c){c.hidden=!c.hidden;render()}});
 $('layerDelete').addEventListener('click',()=>{state.layers=state.layers.filter(c=>c.id!==state.selected);state.selected=state.layers.at(-1)?.id||null;render()});
 function reset(){state.layers=[];state.selected=null;render()}
-function clearSelection(){if(state.selected!==null){state.selected=null;render()}}
+function clearSelection(){if(state.selected!==null){state.selected=null;bridge()?.render?.()}}
 function serialize(){return state.layers.map(c=>({...c}))}
 function restore(project){
  state.layers=Array.isArray(project?.videoLayers)?project.videoLayers.slice(0,4).filter(c=>c&&typeof c.id==='string'&&/^\/api\/editor\/layers\/media\/[a-f0-9]{32}$/.test(c.url)).map(c=>({...c,hidden:!!c.hidden})):[];
