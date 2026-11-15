@@ -6,7 +6,7 @@ const state={file:null,url:'',duration:0,sourceWidth:0,sourceHeight:0,width:1920
  clips:[],overlays:[],audio:null,audioEl:null,selected:null,cursor:0,playing:false,zoom:76,magnet:true,markers:[],undo:[],redo:[],pending:null,drag:null,gapStamp:null,raf:0,previewScale:1,loading:false,playToken:0};
 state.audioEl=document.createElement('audio');state.audioEl.preload='metadata';document.body.appendChild(state.audioEl);
 const clamp=(v,a,b)=>Math.min(Math.max(a,v),b),round=(v)=>Math.round(v*state.fps)/state.fps;
-const duration=c=>(c.end-c.start)/c.speed;
+const duration=c=>(c.end-c.start)/(c.speed||1);
 const endAt=c=>c.at+duration(c);
 const total=()=>Math.max(0,...state.clips.map(endAt));
 const named=c=>c.kind==='base'?state.file?.name||'Vídeo':c.name||'Sobreposição';
@@ -213,7 +213,7 @@ function clipNode(c,kind){const item=document.createElement('div');item.classNam
     const maxEnd=next?Math.min(original.end+(next.at-endAt(original))*original.speed,state.duration):state.duration;
     c.end=clamp(original.end+dt*original.speed,c.start+.08,maxEnd);
    }
-   item.style.left=c.at*state.zoom+'px';item.style.width=Math.max(8,duration(c)*state.zoom)+'px';
+   item.style.left=c.at*state.zoom+'px';item.style.width=Math.max(8,(kind==='audio'?c.end-c.start:duration(c))*state.zoom)+'px';
    syncPlayback();updatePlayhead();
   };
   const done=()=>{
@@ -238,7 +238,7 @@ function renderTracks(){
  [...state.overlays].reverse().forEach((c,index)=>mkTrack('▧ V'+(state.overlays.indexOf(c)+2),'Sobreposição',[c],'overlay'));
  mkTrack('▣ V1','Vídeo principal',state.clips,'base');
  const audio=$('audioLane');audio.replaceChildren();if(state.audio&&Number.isFinite(state.audio.end)&&state.audio.end>0){
-  audio.appendChild(clipNode({...state.audio,kind:'audio'},'audio'));
+  audio.appendChild(clipNode(state.audio,'audio'));
  }
  $('audioMute').setAttribute('aria-pressed',String(!!state.audio?.muted));
  $('audioMute').textContent=state.audio?.muted?'🔇':'🔊';
@@ -274,7 +274,7 @@ async function importOverlay(file){
  const form=new FormData();form.append('file',file);notice('Importando sobreposição...');
  try{const r=await fetch('/api/editor/layers/upload',{method:'POST',body:form});const data=await r.json();if(!r.ok)throw Error(data.detail||'Erro ao importar camada');
   snapshot();const len=Math.min(data.duration,Math.max(.08,total()-state.cursor));
-  const c={id:data.id,kind:'overlay',name:data.name,url:data.url,width:data.width,height:data.height,at:Math.max(0,state.cursor),start:0,end:len,scale:.4,opacity:1,x:.5,y:.5,hidden:false};
+  const c={id:data.id,kind:'overlay',name:data.name,url:data.url,width:data.width,height:data.height,at:clamp(state.cursor,0,Math.max(0,total()-len)),start:0,end:len,scale:.4,opacity:1,x:.5,y:.5,hidden:false};
   state.overlays.push(c);state.selected=c.id;render();notice('Camada V'+(state.overlays.length+1)+' adicionada.')
  }catch(e){notice('Falha: '+e.message)}
 }
