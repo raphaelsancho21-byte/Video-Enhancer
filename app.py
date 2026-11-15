@@ -227,7 +227,7 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
                  export_mode: str = "fast", platform_preset: str = "none",
                  motion_blur: str = "off", blur_amount: int = 70,
                  blur_mix: int = 70, blur_direction: str = "both",
-                 blur_times: int = 2):
+                 blur_times: int = 2, blur_algorithm: str = "flow"):
     with PROCESS_LOCK:
         with JOBS_LOCK:
             JOBS[job_id].update(status="processing", stage="Renderizando edição")
@@ -307,7 +307,7 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
                 else:
                     graph.append(chain + f",format=yuv420p[vraw{i}]")
                 # Apply blur PER CLIP, never mix frames across a cut.
-                from motion_blur import motion_blur_filters
+                from motion_blur import motion_blur_filters, optical_motion_blur_filters
                 source_label = f"v{i}" if not identity else f"vraw{i}"
                 if motion_blur == "off":
                     graph.append(f"[{source_label}]null[vready{i}]")
@@ -320,10 +320,16 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
                     amt, mix, direction, times = strength.get(
                         motion_blur, (blur_amount, blur_mix, blur_direction, blur_times)
                     )
-                    graph.extend(motion_blur_filters(
-                        source_label, f"vready{i}", i, base_fps,
-                        amt, mix, direction, times
-                    ))
+                    if blur_algorithm == "flow":
+                        graph.extend(optical_motion_blur_filters(
+                            source_label, f"vready{i}", i, base_fps,
+                            (end-start)/speed, amt, mix, direction, times
+                        ))
+                    else:
+                        graph.extend(motion_blur_filters(
+                            source_label, f"vready{i}", i, base_fps,
+                            amt, mix, direction, times
+                        ))
                 if has_audio:
                     graph.append(
                         f"[0:a:0]atrim=start={start:.5f}:end={end:.5f},"
@@ -430,8 +436,10 @@ async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
                         motion_blur: str = Form("off"),
                         blur_amount: int = Form(70), blur_mix: int = Form(70),
                         blur_direction: str = Form("both"),
-                        blur_times: int = Form(2)):
+                        blur_times: int = Form(2), blur_algorithm: str = Form("flow")):
     import math
+    if blur_algorithm not in {"flow", "blend"}:
+        raise HTTPException(400, "Algoritmo de Motion Blur inválido")
     if motion_blur not in {"off", "light", "medium", "strong", "custom"}:
         raise HTTPException(400, "Intensidade de Motion Blur inválida")
     if not (0 <= blur_amount <= 100 and 0 <= blur_mix <= 100 and
@@ -532,7 +540,7 @@ async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
         JOBS[job_id] = {"id": job_id, "status": "queued", "stage": "Aguardando exportação",
                         "progress": 0, "error": None, "download": None, "created": time.time()}
     threading.Thread(target=process_edit,
-                     args=(job_id, source, destination, segments, quality, resolution, fps, mute, comp, audio_setting, export_mode, platform_preset, motion_blur, blur_amount, blur_mix, blur_direction, blur_times),
+                     args=(job_id, source, destination, segments, quality, resolution, fps, mute, comp, audio_setting, export_mode, platform_preset, motion_blur, blur_amount, blur_mix, blur_direction, blur_times, blur_algorithm),
                      daemon=True).start()
     return {"id": job_id}
 
