@@ -91,6 +91,13 @@ def main():
         JOBS[key] = {"id": key, "status": "queued", "stage": "queued", "progress": 0}
         short_segments = [{"start": 0, "end": 0.4, "speed": 1, "at": 0},
                           {"start": 0.5, "end": 0.9, "speed": 1, "at": 0.4}]
+        # process_edit removes its temporary input after rendering.
+        subprocess.run([
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=128x72:rate=30:duration=3",
+            "-c:v", "libx264", "-preset", "ultrafast",
+            "-pix_fmt", "yuv420p", str(extra)
+        ], check=True)
         process_edit(key, extra, flow_path, short_segments, "off", "original",
                      "original", False, None, None, "fast", "none",
                      "custom", 70, 80, "both", 2, "flow")
@@ -98,6 +105,39 @@ def main():
             raise AssertionError(JOBS[key].get("error", JOBS[key]))
         assert flow_path.is_file() and flow_path.stat().st_size > 1024
         print("SMOKE PASS: optical-flow Motion Blur video export")
+        # Independent picture-in-picture overlay track, rendered after V1.
+        layer_source = temp / "overlay_source.mp4"
+        composite_source = temp / "composite_source.mp4"
+        composite_output = temp / "multitrack_output.mp4"
+        for path in (layer_source, composite_source):
+            subprocess.run([
+                "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                "-f", "lavfi", "-i", "testsrc2=size=128x72:rate=30:duration=2",
+                "-c:v", "libx264", "-preset", "ultrafast",
+                "-pix_fmt", "yuv420p", str(path)
+            ], check=True)
+        key = "overlay-layer-smoke"
+        JOBS[key] = {"id": key, "status": "queued", "stage": "queued", "progress": 0}
+        overlay = [{
+            "id": "a" * 32, "path": layer_source, "at": 0.3,
+            "start": 0.1, "end": 0.9, "x": 0.5, "y": 0.5,
+            "scale": 0.45, "opacity": 0.7, "width": 128, "height": 72,
+            "hidden": False,
+        }]
+        process_edit(key, composite_source, composite_output,
+                     [{"start": 0, "end": 1.6, "speed": 1, "at": 0}],
+                     "off", "original", "original", True,
+                     None, None, "fast", "none", "off",
+                     70, 70, "both", 2, "flow", True, overlay)
+        if JOBS[key]["status"] != "done":
+            raise AssertionError(JOBS[key].get("error", JOBS[key]))
+        metadata = subprocess.run([
+            "ffprobe", "-v", "error", "-show_entries", "stream=codec_type",
+            "-of", "json", str(composite_output)
+        ], capture_output=True, text=True, check=True)
+        assert any(s["codec_type"] == "video" for s in json.loads(metadata.stdout)["streams"])
+        print("SMOKE PASS: independent V2 layer composited over V1")
+
 
 
 
