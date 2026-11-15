@@ -45,7 +45,7 @@
   <nav class="panel-tabs" aria-label="Propriedades"><button class="active" data-inspector="video">Vídeo</button><button data-inspector="export">Exportação</button></nav>
   <div class="properties-content">
    <section id="clipSettings">
-    <div class="panel-header"><strong>Transformação</strong><span id="selectionLabel">Nenhuma seleção</span></div>
+    <div id="baseSettings"><div class="panel-header"><strong>Transformação</strong><span id="selectionLabel">Nenhuma seleção</span></div>
     <div class="setting"><label>Escala horizontal</label><div class="inputline"><input id="scaleX" type="range" min="10" max="300" value="100"><output id="scaleXVal">100%</output></div></div>
     <div class="setting"><label>Escala vertical</label><div class="inputline"><input id="scaleY" type="range" min="10" max="300" value="100"><output id="scaleYVal">100%</output></div></div>
     <div class="setting double"><div><label>Posição X</label><input id="posX" type="number" step="1" value="0"></div><div><label>Posição Y</label><input id="posY" type="number" step="1" value="0"></div></div>
@@ -53,7 +53,15 @@
     <div class="button-grid"><button id="resetTransform">Redefinir</button><button id="fillCanvas">Preencher tela</button><button id="stretchCanvas">Esticar na composição</button><button id="centerCanvas">Centralizar</button></div>
     <div class="separator"></div>
     <div class="setting"><label>Velocidade do clipe</label><select id="speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></div>
-    <p class="helper">Selecione um clipe na timeline. Arraste o vídeo na prévia ou seus cantos para redimensionar.</p>
+    <p class="helper">Selecione um clipe na timeline. Arraste o vídeo na prévia ou seus cantos para redimensionar.</p></div>
+    <div id="overlaySettings" hidden>
+     <div class="panel-header"><strong>Sobreposição</strong><span id="overlayName">V2</span></div>
+     <div class="setting"><label>Tamanho da camada</label><div class="inputline"><input id="overlayScale" type="range" min="10" max="100" value="40"><output id="overlayScaleValue">40%</output></div></div>
+     <div class="setting"><label>Opacidade</label><div class="inputline"><input id="overlayOpacity" type="range" min="0" max="100" value="100"><output id="overlayOpacityValue">100%</output></div></div>
+     <div class="setting double"><div><label>Início na timeline</label><input id="overlayAt" type="number" min="0" step=".01"></div><div><label>Fim no vídeo</label><input id="overlayEnd" type="number" min=".08" step=".01"></div></div>
+     <div class="button-grid"><button id="overlayToggle">Ocultar camada</button><button id="overlayDelete">Excluir camada</button></div>
+     <p class="helper">Arraste a camada na prévia para posicionar e na timeline para ajustar o início. O áudio da sobreposição não é exportado.</p>
+    </div>
    </section>
    <section id="exportSettings" hidden>
     <div class="panel-header"><strong>Configurações de saída</strong></div>
