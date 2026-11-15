@@ -82,7 +82,7 @@ function render() {
  $('exportBtn').disabled=clips.length===0;$('splitBtn').disabled=clips.length===0;$('deleteBtn').disabled=selected<0;$('undoBtn').disabled=undo.length===0;$('redoBtn').disabled=redo.length===0;
  $('noSelection').hidden=selected>=0;$('clipInspector').hidden=selected<0;
  if(selected>=0){const c=clips[selected];$('clipIndex').textContent='#'+(selected+1);$('startField').value=c.start.toFixed(2);$('endField').value=c.end.toFixed(2);$('speedField').value=String(c.speed)}
- window.TimelineSmart?.visualize();window.VideoEnhancerProjectMedia?.update?.();paintPlayhead();
+ window.TimelineSmart?.visualize();window.VideoEnhancerProjectMedia?.update?.();window.VideoEnhancerLayers?.render?.();paintPlayhead();
 }
 function split(){
  const at=locate(cursor);if(!at)return;
@@ -129,7 +129,7 @@ async function importFile(f){
  await new Promise((res,rej)=>{video.onloadedmetadata=res;video.onerror=()=>rej(Error('Formato não reproduzível pelo navegador'))}).catch(err=>notify(err.message));
  if(!Number.isFinite(video.duration)||video.duration<=0){file=null;return}
  sourceDuration=video.duration;
- window.VideoEnhancerProjectMedia?.resetForMedia?.();
+ window.VideoEnhancerProjectMedia?.resetForMedia?.();window.VideoEnhancerLayers?.reset?.();
  canvasApi()?.dimension(video.videoWidth,video.videoHeight);currentCanvasClip=-1;
  clips=[{start:0,end:sourceDuration,speed:1,at:0}];
  window.VideoEnhancerProjectMedia?.initialize?.(video.videoWidth,video.videoHeight);selected=0;cursor=0;undo=[];redo=[];thumbnails=[];playing=false;
@@ -175,7 +175,7 @@ document.addEventListener('keydown',e=>{const active=document.activeElement;if([
  if(e.code==='Space'){e.preventDefault();toggle()}else if(e.key.toLowerCase()==='m'){e.preventDefault();window.TimelineSmart?.addMarker?.()}else if(e.key.toLowerCase()==='s')split();else if(e.key==='Delete'||e.key==='Backspace')remove();else if(e.key==='ArrowRight')seek(cursor+1/30);else if(e.key==='ArrowLeft')seek(cursor-1/30)});
 function projectData(){
  return {format:'video-enhancer-project',version:1,title:$('projectName').value,
-  media:file?{name:file.name,size:file.size,duration:sourceDuration}:null,
+  media:file?{name:file.name,size:file.size,duration:sourceDuration}:null,videoLayers:window.VideoEnhancerLayers?.serialize?.()||[],
   clips:clips.map(c=>({...c})),markers:window.TimelineSmart?.manual||[],projectMedia:window.VideoEnhancerProjectMedia?.serialize?.(),settings:{quality:$('exportQuality').value,resolution:$('exportResolution').value,fps:$('exportFps').value,exportMode:$('exportMode').value,platformPreset:$('platformPreset').value,muteSourceAudio:$('muteSourceAudio').checked,motionBlur:$('motionBlur').value,blurAlgorithm:$('blurAlgorithm').value,blurAmount:Number($('blurAmount').value),blurMix:Number($('blurBlend').value),blurDirection:$('blurDirection').value,blurTimes:Number($('blurTimes').value),mute:$('muteExport').checked,canvasSnap:$('canvasSnap').checked,magnet:$('magnetToggle').getAttribute('aria-pressed')==='true',beatSnap:$('beatToggle').getAttribute('aria-pressed')==='true',ripple:$('rippleToggle').getAttribute('aria-pressed')==='true'}};
 }
 function applyProject(data){
@@ -186,7 +186,7 @@ function applyProject(data){
  snapshot();let pos=0;clips=data.clips.map(c=>{const at=Number.isFinite(c.at)?c.at:pos;const v={start:c.start,end:Math.min(c.end,sourceDuration),speed:c.speed,at,transform:c.transform?canvasApi()?.ensure(c.transform):undefined};pos=at+dlen(v);return v});selected=clips.length?0:-1;currentCanvasClip=-1;
  $('projectName').value=String(data.title||'Meu projeto').slice(0,70);
  if(data.settings){$('muteSourceAudio').checked=!!data.settings.muteSourceAudio;window.VideoEnhancerProjectMedia?.updateAudioMute?.();for(const key of ['quality','resolution','fps','exportMode','platformPreset','motionBlur']){const id=key==='motionBlur'?'motionBlur':key==='platformPreset'?'platformPreset':'export'+key[0].toUpperCase()+key.slice(1);if($(id)&&[...$(id).options].some(o=>o.value===data.settings[key]))$(id).value=data.settings[key]}$('muteExport').checked=!!data.settings.mute;if(typeof data.settings.canvasSnap==='boolean'){$('canvasSnap').checked=data.settings.canvasSnap;$('canvasSnap').dispatchEvent(new Event('change'))}for(const key of ['magnet','beatSnap','ripple']){const button=$(key==='magnet'?'magnetToggle':key==='beatSnap'?'beatToggle':'rippleToggle');if(typeof data.settings[key]==='boolean'&&(button.getAttribute('aria-pressed')==='true')!==data.settings[key])button.click()}}
- if(data.settings){for(const [k,id] of [['blurAmount','blurAmount'],['blurMix','blurBlend'],['blurTimes','blurTimes'],['blurDirection','blurDirection'],['blurAlgorithm','blurAlgorithm']]){const value=data.settings[k];if(value!==undefined&&$(id)){if($(id).tagName==='SELECT'){if([...$(id).options].some(o=>o.value===String(value)))$(id).value=String(value)}else if(Number.isFinite(Number(value)))$(id).value=String(value)}}window.VideoEnhancerMotionBlur?.refresh?.()}if(data.markers)window.TimelineSmart?.loadMarkers(data.markers);window.VideoEnhancerProjectMedia?.restore?.(data);seek(0);render();notify('Projeto aberto com sucesso');
+ if(data.settings){for(const [k,id] of [['blurAmount','blurAmount'],['blurMix','blurBlend'],['blurTimes','blurTimes'],['blurDirection','blurDirection'],['blurAlgorithm','blurAlgorithm']]){const value=data.settings[k];if(value!==undefined&&$(id)){if($(id).tagName==='SELECT'){if([...$(id).options].some(o=>o.value===String(value)))$(id).value=String(value)}else if(Number.isFinite(Number(value)))$(id).value=String(value)}}window.VideoEnhancerMotionBlur?.refresh?.()}if(data.markers)window.TimelineSmart?.loadMarkers(data.markers);window.VideoEnhancerProjectMedia?.restore?.(data);window.VideoEnhancerLayers?.restore?.(data);seek(0);render();notify('Projeto aberto com sucesso');
 }
 $('saveProject').addEventListener('click',()=>{
  if(!file){notify('Importe um vídeo antes de salvar o projeto');return}
@@ -206,7 +206,7 @@ $('exportBtn').addEventListener('click',async()=>{
  $('exportModal').hidden=false;$('closeModal').disabled=true;$('download').hidden=true;$('exportFill').style.width='0%';$('exportPercent').textContent='0%';$('exportStatus').textContent='Enviando vídeo...';$('exportBtn').disabled=true;
  try{
   const form=new FormData();form.append('file',file);
-  form.append('clips',JSON.stringify(clips));form.append('quality',$('exportQuality').value);form.append('resolution',$('exportResolution').value);form.append('fps',$('exportFps').value);form.append('mute',String($('muteExport').checked));form.append('mute_source_audio',String($('muteSourceAudio').checked));form.append('export_mode',$('exportMode').value);form.append('platform_preset',$('platformPreset').value);form.append('motion_blur',$('motionBlur').value);form.append('blur_amount',$('blurAmount').value);form.append('blur_mix',$('blurBlend').value);form.append('blur_direction',$('blurDirection').value);form.append('blur_times',$('blurTimes').value);form.append('blur_algorithm',$('blurAlgorithm').value);window.VideoEnhancerProjectMedia?.appendExport?.(form);
+  form.append('clips',JSON.stringify(clips));form.append('quality',$('exportQuality').value);form.append('resolution',$('exportResolution').value);form.append('fps',$('exportFps').value);form.append('mute',String($('muteExport').checked));form.append('mute_source_audio',String($('muteSourceAudio').checked));form.append('export_mode',$('exportMode').value);form.append('platform_preset',$('platformPreset').value);form.append('motion_blur',$('motionBlur').value);form.append('blur_amount',$('blurAmount').value);form.append('blur_mix',$('blurBlend').value);form.append('blur_direction',$('blurDirection').value);form.append('blur_times',$('blurTimes').value);form.append('blur_algorithm',$('blurAlgorithm').value);window.VideoEnhancerProjectMedia?.appendExport?.(form);window.VideoEnhancerLayers?.appendExport?.(form);
   const job=await jsonResponse('/api/editor/export',{method:'POST',body:form});
   while(true){const result=await jsonResponse('/api/jobs/'+job.id);$('exportStatus').textContent=result.stage;$('exportFill').style.width=result.progress+'%';$('exportPercent').textContent=result.progress+'%';if(result.status==='error')throw Error(result.error||'Erro ao exportar');if(result.status==='done'){window.dispatchEvent(new CustomEvent('video-enhancer-exported',{detail:{jobId:job.id}}));$('download').href=result.download;$('download').hidden=false;$('exportStatus').textContent='Exportação concluída!';break}await sleep(1200)}
  }catch(e){$('exportStatus').textContent='Erro: '+e.message;notify('Exportação falhou')}
