@@ -84,6 +84,21 @@ def main():
         stream = json.loads(result.stdout)["streams"][0]
         assert 2.3 <= float(stream["duration"]) <= 2.8, stream
         print("SMOKE PASS: strong bidirectional temporal blur export", stream)
+        # Verify motion-compensated optical-flow blur without caching a full video.
+        # A tiny test source keeps GitHub CI fast despite minterpolate CPU cost.
+        key = "flow-motion-blur"
+        flow_path = temp / "motion_flow.mp4"
+        JOBS[key] = {"id": key, "status": "queued", "stage": "queued", "progress": 0}
+        short_segments = [{"start": 0, "end": 0.4, "speed": 1, "at": 0},
+                          {"start": 0.5, "end": 0.9, "speed": 1, "at": 0.4}]
+        process_edit(key, extra, flow_path, short_segments, "off", "original",
+                     "original", False, None, None, "fast", "none",
+                     "custom", 70, 80, "both", 2, "flow")
+        if JOBS[key]["status"] != "done":
+            raise AssertionError(JOBS[key].get("error", JOBS[key]))
+        assert flow_path.is_file() and flow_path.stat().st_size > 1024
+        print("SMOKE PASS: optical-flow Motion Blur video export")
+
 
 
 if __name__ == "__main__":
