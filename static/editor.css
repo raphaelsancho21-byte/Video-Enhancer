@@ -93,3 +93,13 @@ html,body{height:100%;width:100%;overflow:hidden}
 .motion-slider-label output{color:#c8bcff;font-variant-numeric:tabular-nums}
 .motion-controls .hint{margin:8px 0 2px}
 .motion-controls.is-off{opacity:.43;pointer-events:none}
+
+/* Lightweight on-demand render preview; always streamed inline, never downloaded. */
+.viewport{position:relative}
+.effect-preview-pane{position:absolute;inset:0;z-index:35;background:#080e18;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:10px}
+.effect-preview-pane video{max-width:100%;max-height:calc(100% - 60px);width:auto;height:auto;object-fit:contain;display:block;background:black;border-radius:5px}
+.effect-preview-top{position:absolute;top:8px;left:10px;right:10px;z-index:2;display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:10px;color:#d4daee;text-shadow:0 1px 2px #000}
+.effect-preview-top button{border:1px solid #6b6d80;background:#1c2435;border-radius:6px;padding:3px 9px}
+.effect-preview-status{font-size:11px;color:#bbc9de;text-align:center;min-height:16px}
+#previewEffectsBtn{border-color:#6658bd;background:#27234c;color:#d8d0ff;font-size:11px;font-weight:600}
+#previewEffectsBtn:disabled{opacity:.45}
