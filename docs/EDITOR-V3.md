@@ -17,7 +17,7 @@ Abrir **http://127.0.0.1:8000/static/v3/index.html**. Para voltar ao V1, clique 
 
 ## Fluxo implementado nesta primeira fase
 
-- Interface com biblioteca, monitor, propriedades e timeline maior, com zoom e rolagem.
+- Interface com biblioteca, monitor, propriedades e timeline maior, com zoom e rolagem. Divisórias arrastáveis permitem redimensionar biblioteca, propriedades e altura da timeline no desktop.
 - Importação de um vídeo principal; preview em HTMLVideoElement nativo, sem renderização contínua via FFmpeg.
 - Divisão no cursor (S), arraste de clipes, aparo nas bordas, magnetismo de 12 px, exclusão com fechamento de espaço e desfazer/refazer (40 ações).
 - Marcadores manuais (M) criados diretamente no tempo da timeline.
