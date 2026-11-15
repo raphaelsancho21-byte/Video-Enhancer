@@ -69,7 +69,7 @@ function render() {
   if(thumbnails.length)strip.style.backgroundImage='url("'+thumbnails[Math.min(thumbnails.length-1,Math.floor((c.start/sourceDuration)*thumbnails.length))]+'")';
   el.querySelector('.clip-name').textContent=(file?.name||'Vídeo')+' · '+(i+1);
   el.querySelector('.clip-duration').textContent=fmt(dlen(c));
-  el.addEventListener('click',e=>{if(dragging)return;selected=i;if(!e.target.classList.contains('trim'))seek(clipOffset+clamp((e.clientX-el.getBoundingClientRect().left)/p,0,dlen(c)));render()});
+  el.addEventListener('click',e=>{if(dragging)return;window.VideoEnhancerLayers?.clearSelection?.();selected=i;if(!e.target.classList.contains('trim'))seek(clipOffset+clamp((e.clientX-el.getBoundingClientRect().left)/p,0,dlen(c)));render()});
   window.TimelineSmart?.bindClip(el,i);
   $('clips').appendChild(el);offset=Math.max(offset,clipOffset+dlen(c))
  });
@@ -229,6 +229,6 @@ async function makeThumbnails(url){
  }finally{probe.pause();probe.removeAttribute('src');probe.load()}
  return frames;
 }
-window.VideoEnhancerTimelineBridge={clips:()=>clips,cursor:()=>cursor,total,seek,render,snapshot,sourceDuration:()=>sourceDuration,file:()=>file, fps:()=>Number($('projectFps')?.value||30),playing:()=>playing,accurateCursor:()=>{const loc=locate(cursor);if(playing&&loc&&!video.paused){const clip=clips[loc.index];return clamp(loc.at+(video.currentTime-clip.start)/clip.speed,loc.at,loc.at+dlen(clip))}return cursor},refreshComposition:()=>{currentCanvasClip=-1;syncVideo(true)},select:i=>{selected=i;for(const el of $('clips').children)el.classList.toggle('selected',Number(el.dataset.index)===i)}};
+window.VideoEnhancerTimelineBridge={clips:()=>clips,cursor:()=>cursor,total,seek,render,snapshot,sourceDuration:()=>sourceDuration,file:()=>file, fps:()=>Number($('projectFps')?.value||30),playing:()=>playing,accurateCursor:()=>{const loc=locate(cursor);if(playing&&loc&&!video.paused){const clip=clips[loc.index];return clamp(loc.at+(video.currentTime-clip.start)/clip.speed,loc.at,loc.at+dlen(clip))}return cursor},refreshComposition:()=>{currentCanvasClip=-1;syncVideo(true)},select:i=>{window.VideoEnhancerLayers?.clearSelection?.();selected=i;for(const el of $('clips').children)el.classList.toggle('selected',Number(el.dataset.index)===i)}};
 window.addEventListener('resize',render);render();
 })();
