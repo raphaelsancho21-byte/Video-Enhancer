@@ -208,6 +208,22 @@ def download(job_id: str):
 
 
 
+@app.get("/api/editor/preview/{job_id}")
+def preview_result(job_id: str):
+    """Stream a completed short render inline instead of starting a download."""
+    if not re.fullmatch(r"[0-9a-f]{32}", job_id):
+        raise HTTPException(404, "Prévia não encontrada")
+    with JOBS_LOCK:
+        job = JOBS.get(job_id)
+        if not job or job.get("status") != "done":
+            raise HTTPException(404, "Prévia ainda não disponível")
+    path = OUTPUTS / f"{job_id}.mp4"
+    if not path.is_file():
+        raise HTTPException(404, "Arquivo de prévia não encontrado")
+    return FileResponse(path, media_type="video/mp4", content_disposition_type="inline",
+                        headers={"Cache-Control": "no-store"})
+
+
 @app.get("/editor")
 def editor_page():
     return FileResponse(ROOT / "static" / "editor.html")
