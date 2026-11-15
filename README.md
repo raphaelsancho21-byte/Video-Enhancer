@@ -159,3 +159,12 @@ O filtro FFmpeg executa uma combinação temporal de quadros com `tmix`, `blend`
 ### Motion Blur com estimativa de movimento (V1.8)
 
 **Novo padrão:** Fluxo de movimento, opção acima dos controles de Desfocar/Misturar. O motor usa o filtro FFmpeg `minterpolate` em modo `mci` (compensação de movimento), gera até 4 subframes por quadro e acumula uma exposição curta com `tmix` antes de retornar à taxa FPS da composição. Mantém a mistura antiga em uma opção separada. Esse método evita os rastros mais óbvios de cópias de frames, mas não replica o algoritmo proprietário do CapCut, pode introduzir artefatos em oclusões/cortes rápidos e custa muito mais CPU. O efeito é aplicado separadamente a cada clipe. A prévia continua sem esse efeito.
+
+
+## Importar música MP3 na timeline (A1)
+
+No editor principal (`/editor`), importe primeiro seu vídeo e clique em **Importar MP3 para a timeline** na biblioteca lateral. O MP3 entra diretamente na faixa A1, pode ser movido para ajustar o começo da música, mutado e ter o volume controlado. Clique em **Detectar batidas** para analisar as batidas desse MP3; o arquivo é incluído no vídeo exportado automaticamente, sem baixar nem converter a música antes de editar.
+
+O MP3 é copiado para o armazenamento local do servidor em `data/audio/` (máximo de 256 MB por arquivo). O projeto JSON armazena a referência a esse áudio, não embute o arquivo. Caso mova o projeto para outro PC, é preciso levar a mídia junto. Atualmente existe uma única faixa de áudio A1 no editor principal, e a exportação usa a música da faixa A1 no lugar do áudio original do vídeo (não mistura os dois). O áudio que excede a duração do vídeo é cortado no final da exportação.
+
+A opção separada **Analisar batidas de outro arquivo** apenas analisa música sem adicioná-la à timeline.
