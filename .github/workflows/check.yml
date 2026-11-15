@@ -15,6 +15,7 @@ jobs:
       - name: JavaScript syntax
         run: |
           for file in static/*.js static/v3/*.js; do node --check "$file"; done
+          node tests/test_v3.cjs
       - name: Setup dependencies
         run: |
           pip install -r requirements.txt
