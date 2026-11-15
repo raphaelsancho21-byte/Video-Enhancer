@@ -159,3 +159,6 @@ body{background:var(--editor-bg)}
  .timeline{grid-column:1}
  .editor-tabs .tab-tip{display:none}
 }
+
+/* Prevent overlapping V1 and overlay inspector controls. */
+.inspector.layer-selected #clipInspector,.inspector.layer-selected #noSelection{display:none!important}
