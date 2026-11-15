@@ -195,5 +195,14 @@ $('detectBeats').addEventListener('click',async()=>{
  finally{$('detectBeats').disabled=false}
 });
 $('addBeatMarker').addEventListener('click',()=>{S.manual.push(round(get().cursor(),frames()));S.manual.sort((a,b)=>a-b);visualize()});
-window.TimelineSmart={bindClip,snap,normalize,insertAfter,deleteAt,visualize,clearGuide,get ripple(){return S.ripple},get manual(){return S.manual},loadMarkers(value){S.manual=Array.isArray(value)?value.filter(Number.isFinite).slice(0,200):[];visualize()},get detected(){return S.beats},shiftDetected(at){if(!S.baseBeats)return;S.beats=S.baseBeats.map(t=>round(t+at,frames()));visualize()},ready(){visualize();$('detectBeats').disabled=!get()?.file()}};
+window.TimelineSmart={bindClip,snap,normalize,insertAfter,deleteAt,visualize,clearGuide,
+ useProjectAudio(){
+  S.music=null;$('beatFile').value='';
+  S.beats=[];S.baseBeats=[];S.waveform=[];S.analyzed=null;
+  visualize();
+ },
+ clearProjectBeats(){
+  S.beats=[];S.baseBeats=[];S.waveform=[];S.analyzed=null;
+  visualize();
+ },get ripple(){return S.ripple},get manual(){return S.manual},loadMarkers(value){S.manual=Array.isArray(value)?value.filter(Number.isFinite).slice(0,200):[];visualize()},get detected(){return S.beats},shiftDetected(at){if(!S.baseBeats)return;S.beats=S.baseBeats.map(t=>round(t+at,frames()));visualize()},ready(){visualize();$('detectBeats').disabled=!get()?.file()}};
 })();
