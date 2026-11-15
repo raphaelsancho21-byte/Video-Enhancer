@@ -151,7 +151,7 @@ for(const [key,id] of Object.entries(fields)){
 $('layerToggleVisibility').addEventListener('click',()=>{const c=active();if(c){c.hidden=!c.hidden;render()}});
 $('layerDelete').addEventListener('click',()=>{state.layers=state.layers.filter(c=>c.id!==state.selected);state.selected=state.layers.at(-1)?.id||null;render()});
 function reset(){state.layers=[];state.selected=null;render()}
-function clearSelection(){if(state.selected!==null){state.selected=null;bridge()?.render?.()}}
+function clearSelection(){state.selected=null;document.querySelector('.inspector')?.classList.remove('layer-selected')}
 function serialize(){return state.layers.map(c=>({...c}))}
 function restore(project){
  state.layers=Array.isArray(project?.videoLayers)?project.videoLayers.slice(0,4).filter(c=>c&&typeof c.id==='string'&&/^\/api\/editor\/layers\/media\/[a-f0-9]{32}$/.test(c.url)).map(c=>({...c,hidden:!!c.hidden})):[];
