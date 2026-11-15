@@ -97,7 +97,7 @@ function syncPlayback(){
 }
 function clock(){if(state.asset)syncPlayback()}
 function updateAudioMute(){
- video.muted=!!$('muteSourceAudio').checked||!!(state.asset&&!state.muted);
+ video.muted=!!$('muteSourceAudio').checked;
 }
 $('muteSourceAudio').addEventListener('change',updateAudioMute);
 function loadAsset(data,restore=false){
