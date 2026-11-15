@@ -15,9 +15,9 @@ const clone=x=>JSON.parse(JSON.stringify(x));
 const asTime=t=>{t=Math.max(0,t||0);const h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=Math.floor(t%60);return (h?h+':':'')+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')};
 let noticeTimer=0;
 function notice(message){$('statusLine').textContent=message;$('toast').textContent=message;$('toast').hidden=false;clearTimeout(noticeTimer);noticeTimer=setTimeout(()=>$('toast').hidden=true,3800)}
-function snapshot(){state.undo.push(JSON.stringify({clips:state.clips,overlays:state.overlays,markers:state.markers,selected:state.selected}));if(state.undo.length>40)state.undo.shift();state.redo=[];updateUndo();}
+function snapshot(){state.undo.push(JSON.stringify({clips:state.clips,overlays:state.overlays,audio:state.audio,markers:state.markers,selected:state.selected}));if(state.undo.length>40)state.undo.shift();state.redo=[];updateUndo();}
 function updateUndo(){$('undoBtn').disabled=!state.undo.length;$('redoBtn').disabled=!state.redo.length}
-function changeHistory(back){const source=back?state.undo:state.redo,target=back?state.redo:state.undo;if(!source.length)return;target.push(JSON.stringify({clips:state.clips,overlays:state.overlays,markers:state.markers,selected:state.selected}));const snap=JSON.parse(source.pop());Object.assign(state,snap);render();seek(Math.min(state.cursor,total()),true);updateUndo();}
+function changeHistory(back){const source=back?state.undo:state.redo,target=back?state.redo:state.undo;if(!source.length)return;target.push(JSON.stringify({clips:state.clips,overlays:state.overlays,audio:state.audio,markers:state.markers,selected:state.selected}));const snap=JSON.parse(source.pop());Object.assign(state,snap);render();seek(Math.min(state.cursor,total()),true);updateUndo();}
 const selectedClip=()=>state.clips.find(c=>c.id===state.selected)||state.overlays.find(c=>c.id===state.selected)||null;
 function defaultTransform(){return{x:state.width/2,y:state.height/2,width:state.sourceWidth||state.width,height:state.sourceHeight||state.height,rotation:0}}
 function clipAt(t=state.cursor){return state.clips.find(c=>t>=c.at-.00001&&t<endAt(c)-.00001)||null}
@@ -384,6 +384,23 @@ document.addEventListener('keydown',e=>{
  if(e.ctrlKey){if(e.key.toLowerCase()==='z'){e.preventDefault();changeHistory(true)}if(e.key.toLowerCase()==='y'){e.preventDefault();changeHistory(false)}return}
  if(e.code==='Space'){e.preventDefault();toggle()}else if(e.key.toLowerCase()==='s'){e.preventDefault();split()}else if(e.key.toLowerCase()==='m'){e.preventDefault();addMarker()}else if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();removeSelected()}else if(e.key==='ArrowRight'){e.preventDefault();stop();seek(state.cursor+1/state.fps,true)}else if(e.key==='ArrowLeft'){e.preventDefault();stop();seek(state.cursor-1/state.fps,true)}
 });
+function installPanelResize(id,axis){
+ const handle=$(id),app=document.querySelector('.app');
+ handle.addEventListener('pointerdown',e=>{
+  if(e.button!==0||matchMedia('(max-width:780px)').matches)return;
+  e.preventDefault();handle.setPointerCapture(e.pointerId);handle.classList.add('active');
+  const rect=app.getBoundingClientRect();
+  const move=ev=>{
+   if(axis==='left'){const value=clamp(ev.clientX-rect.left,180,Math.min(400,rect.width-510));app.style.setProperty('--left-size',Math.round(value)+'px')}
+   if(axis==='right'){const value=clamp(rect.right-ev.clientX,210,Math.min(440,rect.width-490));app.style.setProperty('--right-size',Math.round(value)+'px')}
+   if(axis==='bottom'){const height=clamp(rect.bottom-ev.clientY,265,Math.max(265,rect.height-220));app.style.setProperty('--timeline-size',Math.round(height)+'px')}
+   fitMonitor();renderRuler();renderTracks();updatePlayhead();
+  };
+  const done=()=>{handle.classList.remove('active');handle.removeEventListener('pointermove',move);handle.removeEventListener('pointerup',done);handle.removeEventListener('pointercancel',done)};
+  handle.addEventListener('pointermove',move);handle.addEventListener('pointerup',done);handle.addEventListener('pointercancel',done);
+ });
+}
+installPanelResize('resizeLeft','left');installPanelResize('resizeRight','right');installPanelResize('resizeBottom','bottom');
 window.addEventListener('resize',()=>{fitMonitor();renderRuler();renderTracks();updatePlayhead()});
 updateUndo();render();
 })();
