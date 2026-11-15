@@ -35,6 +35,9 @@ import tiktok_integration
 tiktok_integration.configure(JOBS, JOBS_LOCK, OUTPUTS)
 app.include_router(tiktok_integration.router)
 
+import video_layers
+app.include_router(video_layers.router)
+
 
 def find_binary(name: str) -> str:
     found = shutil.which(name)
@@ -237,6 +240,9 @@ def probe_audio(path: Path) -> bool:
     return result.returncode == 0 and bool(result.stdout.strip())
 
 
+video_layers.configure(DATA / "layers", probe_video)
+
+
 def process_edit(job_id: str, source: Path, destination: Path, segments: list[dict],
                  quality: str, resolution: str, fps: str, muted: bool,
                  composition: dict | None = None, extracted_audio: dict | None = None,
@@ -244,7 +250,8 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
                  motion_blur: str = "off", blur_amount: int = 70,
                  blur_mix: int = 70, blur_direction: str = "both",
                  blur_times: int = 2, blur_algorithm: str = "flow",
-                 mute_source_audio: bool = False):
+                 mute_source_audio: bool = False,
+                 layers: list[dict] | None = None):
     with PROCESS_LOCK:
         with JOBS_LOCK:
             JOBS[job_id].update(status="processing", stage="Renderizando edição")
@@ -370,8 +377,47 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
                 video_map = "[vout]"
             else:
                 video_map = "[vcat]"
+            # Layer videos V2/V3/V4/V5 are independent, silent picture overlays.
+            # Apply each after the base V1 render so cuts and music remain intact.
+            layer_inputs = []
+            if layers:
+                for index, layer in enumerate(layers):
+                    if layer["hidden"] or layer["at"] >= duration:
+                        continue
+                    asset = layer["path"]
+                    input_index = len(layer_inputs) + 1
+                    layer_inputs.append(asset)
+                    # Place overlay using normalized position and scale.
+                    iw, ih = layer["width"], layer["height"]
+                    ow = max(2, round(comp_w * layer["scale"] / 2) * 2)
+                    oh = max(2, round(ow * ih / max(1, iw) / 2) * 2)
+                    ow = min(ow, 4096)
+                    oh = min(oh, 4096)
+                    tag = f"layer{index}"
+                    graph.append(
+                        f"[{input_index}:v:0]"
+                        f"trim=start={layer['start']:.6f}:end={layer['end']:.6f},"
+                        f"setpts=PTS-STARTPTS,fps={base_fps:.6f},"
+                        f"scale={ow}:{oh}:flags=bicubic,format=rgba,"
+                        f"colorchannelmixer=aa={layer['opacity']:.5f},"
+                        f"setpts=PTS+{layer['at']:.6f}/TB[{tag}]"
+                    )
+                    combined = f"layered{index}"
+                    graph.append(
+                        f"{video_map}[{tag}]overlay="
+                        f"x=(W-w)*{layer['x']:.6f}:y=(H-h)*{layer['y']:.6f}:"
+                        f"eof_action=pass:repeatlast=0:shortest=0:format=auto"
+                        f"[{combined}]"
+                    )
+                    video_map = f"[{combined}]"
+                if layer_inputs:
+                    graph.append(f"{video_map}format=yuv420p[layerout]")
+                    video_map = "[layerout]"
+            ff_inputs = ["-i", str(source)]
+            for layer_path in layer_inputs:
+                ff_inputs += ["-i", str(layer_path)]
             cmd = [find_binary("ffmpeg"), "-hide_banner", "-nostdin", "-y",
-                   "-i", str(source), "-filter_complex", ";".join(graph),
+                   *ff_inputs, "-filter_complex", ";".join(graph),
                    "-map", video_map]
             if separate_audio:
                 audio_path = AUDIO / (extracted_audio["id"] + ".mp3")
@@ -382,7 +428,7 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
                 # A1 is independent from V1. A muted V1 can still export A1;
                 # when both are enabled mix them together, not replace either.
                 audio_graph = (
-                    f"[1:a:0]atrim=duration={max(0., duration-offset):.6f},"
+                    f"[{1+len(layer_inputs)}:a:0]atrim=duration={max(0., duration-offset):.6f},"
                     f"asetpts=PTS-STARTPTS,volume={volume:.4f},"
                     f"adelay={int(round(offset*1000))}:all=1,"
                     f"apad=whole_dur={duration:.6f},"
@@ -397,7 +443,7 @@ def process_edit(job_id: str, source: Path, destination: Path, segments: list[di
                     )
                     audio_map = "[mixed_audio]"
                 cmd = [find_binary("ffmpeg"), "-hide_banner", "-nostdin", "-y",
-                       "-i", str(source), "-i", str(audio_path),
+                       *ff_inputs, "-i", str(audio_path),
                        "-filter_complex", ";".join(graph), "-map", video_map,
                        "-map", audio_map]
             elif has_audio:
@@ -460,7 +506,8 @@ async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
                         blur_amount: int = Form(70), blur_mix: int = Form(70),
                         blur_direction: str = Form("both"),
                         blur_times: int = Form(2), blur_algorithm: str = Form("flow"),
-                        mute_source_audio: bool = Form(False)):
+                        mute_source_audio: bool = Form(False),
+                        video_overlays: str = Form("[]")):
     import math
     if blur_algorithm not in {"flow", "blend"}:
         raise HTTPException(400, "Algoritmo de Motion Blur inválido")
@@ -507,6 +554,7 @@ async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
             if not (0 <= audio_at <= 24*3600 and 0 <= audio_volume <= 2):
                 raise ValueError("Posição ou volume de áudio inválido")
             audio_setting = {"id": aid, "at": audio_at, "volume": audio_volume}
+        overlay_settings = video_layers.validate_layers(json.loads(video_overlays))
         segments = json.loads(clips)
         if not isinstance(segments, list) or not 1 <= len(segments) <= 100:
             raise ValueError("Use entre 1 e 100 trechos")
@@ -564,7 +612,7 @@ async def editor_export(file: UploadFile = File(...), clips: str = Form(...),
         JOBS[job_id] = {"id": job_id, "status": "queued", "stage": "Aguardando exportação",
                         "progress": 0, "error": None, "download": None, "created": time.time()}
     threading.Thread(target=process_edit,
-                     args=(job_id, source, destination, segments, quality, resolution, fps, mute, comp, audio_setting, export_mode, platform_preset, motion_blur, blur_amount, blur_mix, blur_direction, blur_times, blur_algorithm, mute_source_audio),
+                     args=(job_id, source, destination, segments, quality, resolution, fps, mute, comp, audio_setting, export_mode, platform_preset, motion_blur, blur_amount, blur_mix, blur_direction, blur_times, blur_algorithm, mute_source_audio, overlay_settings),
                      daemon=True).start()
     return {"id": job_id}
 
