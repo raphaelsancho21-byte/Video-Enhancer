@@ -129,7 +129,9 @@ function moveBase(e){
 el.base.addEventListener('pointerdown',moveBase);
 function updateInspector(){
  const c=selectedClip();$('selectionLabel').textContent=c?named(c).slice(0,23):'Nenhuma seleção';
- const isBase=c&&c.kind==='base';const t=isBase?(c.transform||(c.transform=defaultTransform())):null;
+ const isBase=c&&c.kind==='base';const isOverlay=c&&c.kind==='overlay';$('baseSettings').hidden=!isBase;$('overlaySettings').hidden=!isOverlay;
+ if(isOverlay){$('overlayName').textContent=c.name;$('overlayScale').value=Math.round(c.scale*100);$('overlayScaleValue').textContent=Math.round(c.scale*100)+'%';$('overlayOpacity').value=Math.round(c.opacity*100);$('overlayOpacityValue').textContent=Math.round(c.opacity*100)+'%';$('overlayAt').value=c.at.toFixed(2);$('overlayEnd').value=c.end.toFixed(2)}
+ const t=isBase?(c.transform||(c.transform=defaultTransform())):null;
  for(const id of ['scaleX','scaleY','posX','posY','rotation','speed','resetTransform','fillCanvas','stretchCanvas','centerCanvas'])$(id).disabled=!isBase;
  if(!t)return;
  const scaleX=Math.round(t.width/Math.max(1,state.sourceWidth)*100),scaleY=Math.round(t.height/Math.max(1,state.sourceHeight)*100);
@@ -155,6 +157,14 @@ for(const id of config)$(id).addEventListener(['posX','posY'].includes(id)?'chan
  if(id==='posY')t.y=state.height/2+n;
  applyTransform(t);updateInspector();
 });
+for(const [id,key] of [['overlayScale','scale'],['overlayOpacity','opacity']]){
+ $(id).addEventListener('input',()=>{const c=selectedClip();if(!c||c.kind!=='overlay')return;c[key]=Number($(id).value)/100;$(id+'Value').textContent=$(id).value+'%';syncOverlays()});
+ $(id).addEventListener('change',()=>{render()});
+}
+$('overlayAt').addEventListener('change',()=>{const c=selectedClip();if(!c||c.kind!=='overlay')return;const v=Number($('overlayAt').value);if(!Number.isFinite(v))return;snapshot();c.at=round(clamp(v,0,Math.max(0,total()-(c.end-c.start))));render()});
+$('overlayEnd').addEventListener('change',()=>{const c=selectedClip();if(!c||c.kind!=='overlay')return;const v=Number($('overlayEnd').value);if(!Number.isFinite(v))return;snapshot();c.end=clamp(v,c.start+.08,c.duration||c.end);render()});
+$('overlayToggle').addEventListener('click',()=>{const c=selectedClip();if(!c||c.kind!=='overlay')return;snapshot();c.hidden=!c.hidden;render()});
+$('overlayDelete').addEventListener('click',()=>removeSelected());
 $('resetTransform').addEventListener('click',()=>applySetting(t=>Object.assign(t,defaultTransform())));
 $('stretchCanvas').addEventListener('click',()=>applySetting(t=>Object.assign(t,{width:state.width,height:state.height,x:state.width/2,y:state.height/2,rotation:0})));
 $('fillCanvas').addEventListener('click',()=>applySetting(t=>{const s=Math.max(state.width/state.sourceWidth,state.height/state.sourceHeight);Object.assign(t,{width:state.sourceWidth*s,height:state.sourceHeight*s,x:state.width/2,y:state.height/2,rotation:0})}));
@@ -274,7 +284,7 @@ async function importOverlay(file){
  const form=new FormData();form.append('file',file);notice('Importando sobreposição...');
  try{const r=await fetch('/api/editor/layers/upload',{method:'POST',body:form});const data=await r.json();if(!r.ok)throw Error(data.detail||'Erro ao importar camada');
   snapshot();const len=Math.min(data.duration,Math.max(.08,total()-state.cursor));
-  const c={id:data.id,kind:'overlay',name:data.name,url:data.url,width:data.width,height:data.height,at:clamp(state.cursor,0,Math.max(0,total()-len)),start:0,end:len,scale:.4,opacity:1,x:.5,y:.5,hidden:false};
+  const c={id:data.id,kind:'overlay',name:data.name,url:data.url,width:data.width,height:data.height,duration:data.duration,at:clamp(state.cursor,0,Math.max(0,total()-len)),start:0,end:len,scale:.4,opacity:1,x:.5,y:.5,hidden:false};
   state.overlays.push(c);state.selected=c.id;render();notice('Camada V'+(state.overlays.length+1)+' adicionada.')
  }catch(e){notice('Falha: '+e.message)}
 }
@@ -339,7 +349,7 @@ function restore(data){
   $('projectName').value=data.name||'Projeto V3';$('canvasWidth').value=state.width;$('canvasHeight').value=state.height;$('canvasFps').value=state.fps;
   state.audio=data.audio?.id?clone(data.audio):null;
   if(state.audio){state.audioEl.src=state.audio.url;state.audioEl.load()}
-  if(data.settings){$('quality').value=data.settings.quality||'balanced';$('exportMode').value=data.settings.mode||'fast';$('muteSource').checked=!!data.settings.muteSource;$('muteAll').checked=!!data.settings.muteAll}
+  if(data.settings){$('quality').value=data.settings.quality||'balanced';$('exportMode').value=data.settings.mode||'fast';$('muteSource').checked=!!data.settings.muteSource;$('muteAll').checked=!!data.settings.muteAll;el.video.muted=$('muteSource').checked||$('muteAll').checked}
   state.selected=state.clips[0].id;state.undo=[];state.redo=[];state.cursor=0;fitMonitor();render();updateUndo();notice('Projeto V3 restaurado.')}
  catch(e){notice('Falha ao restaurar: '+e.message)}
 }
@@ -356,7 +366,7 @@ $('mainFile').addEventListener('change',e=>{const f=e.target.files?.[0];e.target
 $('overlayFile').addEventListener('change',e=>{const f=e.target.files?.[0];e.target.value='';importOverlay(f)});
 $('audioFile').addEventListener('change',e=>{const f=e.target.files?.[0];e.target.value='';importAudio(f)});
 $('playBtn').addEventListener('click',toggle);$('goStart').addEventListener('click',()=>{stop();seek(0,true)});$('stepForward').addEventListener('click',()=>{stop();seek(state.cursor+1/state.fps,true)});
-$('fitMonitor').addEventListener('click',fitMonitor);$('volume').addEventListener('input',()=>{el.video.volume=Number($('volume').value)/100;state.audioEl.volume=Number($('volume').value)/100});el.video.volume=.8;state.audioEl.volume=.8;
+$('fitMonitor').addEventListener('click',fitMonitor);$('volume').addEventListener('input',()=>{el.video.volume=Number($('volume').value)/100;state.audioEl.volume=Number($('volume').value)/100});$('muteSource').addEventListener('change',()=>{el.video.muted=$('muteSource').checked||$('muteAll').checked});$('muteAll').addEventListener('change',()=>{el.video.muted=$('muteSource').checked||$('muteAll').checked;syncAudio()});el.video.volume=.8;state.audioEl.volume=.8;
 $('splitBtn').addEventListener('click',split);$('deleteBtn').addEventListener('click',removeSelected);$('markerBtn').addEventListener('click',addMarker);$('undoBtn').addEventListener('click',()=>changeHistory(true));$('redoBtn').addEventListener('click',()=>changeHistory(false));
 $('magnetBtn').addEventListener('click',()=>{state.magnet=!state.magnet;$('magnetBtn').classList.toggle('tool-active',state.magnet);$('magnetBtn').setAttribute('aria-pressed',String(state.magnet))});
 $('audioMute').addEventListener('click',()=>{if(!state.audio)return;state.audio.muted=!state.audio.muted;syncAudio();renderTracks()});
