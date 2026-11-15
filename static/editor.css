@@ -103,3 +103,59 @@ html,body{height:100%;width:100%;overflow:hidden}
 .effect-preview-status{font-size:11px;color:#bbc9de;text-align:center;min-height:16px}
 #previewEffectsBtn{border-color:#6658bd;background:#27234c;color:#d8d0ff;font-size:11px;font-weight:600}
 #previewEffectsBtn:disabled{opacity:.45}
+
+/* Video Enhancer multitrack workspace — compact desktop editing layout */
+:root{--editor-bg:#101218;--editor-panel:#171b24;--editor-border:#2a303c;--editor-accent:#73a3fa}
+body{background:var(--editor-bg)}
+.editor-tabs{height:42px;display:flex;align-items:center;gap:0;background:#161a23;border-bottom:1px solid #2d3440;padding-left:18px;overflow:auto hidden;white-space:nowrap}
+.editor-tabs>span{font-size:11px;color:#9aa5b7;padding:13px 19px;border-right:1px solid #252b36;font-weight:600}
+.editor-tabs>.tab-active{color:#e7ecff;border-bottom:2px solid #84a9fa;background:#202734}
+.editor-tabs>.tab-tip{margin-left:auto;border:0;color:#6f7f97;font-size:9px;letter-spacing:1px}
+.studio{height:calc(100vh - 102px);grid-template-columns:260px minmax(310px,1fr) 310px;grid-template-rows:minmax(190px,1fr) minmax(305px,43vh)}
+.library,.inspector{background:#171b23;padding:15px 13px;scrollbar-width:thin;scrollbar-color:#424b60 transparent}
+.center{background:#0d1017}
+.inspector{border-left:1px solid #343b4b}
+.library{border-right:1px solid #343b4b}
+.aside-title{color:#9aa8bf;margin-bottom:12px;letter-spacing:1.3px}
+.library .import{margin:5px 0;border:1px dashed #515c78;background:#22293b;color:#d7deef;padding:11px}
+.library .layer-import{background:#222a37;border-color:#51668b;color:#a3cdff}
+.library .hint{margin:10px 0}
+.layer-library{display:flex;flex-direction:column;gap:5px;margin:8px 0}
+.layer-asset{display:block;background:#242b36;border:1px solid #3b4960;padding:9px 10px;border-radius:6px;text-align:left;color:#b3c4dd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.layer-asset.on{background:#263f68;border-color:#78aaf5;color:#fff}
+.timeline{background:#141923}
+.timeline-tools{gap:9px;height:48px;padding:0 11px}
+.timeline-tools button{font-size:11px;padding:6px 9px}
+.timeline-tools .timeline-subtitle{font-size:9px;letter-spacing:.6px;color:#7b8fae}
+.timeline-scroll{background:#111822;scrollbar-width:thin;scrollbar-color:#40495e transparent}
+.timeline-stage{height:auto;min-height:180px}
+.overlay-timeline-tracks{position:relative;margin-top:4px}
+.overlay-track-row{display:flex;height:64px;position:relative;border-bottom:1px solid #2d3749}
+.overlay-track-row .track-label{height:63px;min-height:63px;padding:12px 11px;background:#1c293b;color:#a8caff;position:relative;z-index:3}
+.overlay-track-row .track-label strong{font-size:12px}
+.overlay-track-body{position:relative;height:63px;min-width:0;flex:1;background:repeating-linear-gradient(90deg,#162235 0,#162235 64px,#1a293d 65px)}
+.overlay-timeline-clip{position:absolute;top:8px;height:47px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:13px 9px;border:1px solid #508ac6;background:linear-gradient(90deg,#27517e,#2a6995);color:#e1f2ff;font-size:11px;font-weight:700;border-radius:5px;touch-action:none;cursor:grab;user-select:none}
+.overlay-timeline-clip.selected{border-color:#ddedff;box-shadow:inset 0 0 0 1px #d2e7ff}
+.overlay-timeline-clip:active{cursor:grabbing}
+.overlay-canvas-layers{position:absolute;inset:0;z-index:5;pointer-events:none}
+.overlay-preview-item{position:absolute;overflow:hidden;pointer-events:auto;outline:1px solid #6baaff;cursor:move;touch-action:none}
+.overlay-preview-item.selected{outline:2px solid #e1f2ff}
+.overlay-preview-item video{width:100%;height:100%;display:block;object-fit:fill;pointer-events:none;box-shadow:none}
+.overlay-preview-item[hidden]{display:none!important}
+.overlay-inspector{background:#202a3a;padding:11px 10px;margin:0 0 16px;border:1px solid #435472;border-radius:8px}
+.overlay-inspector .field{margin:11px 0}
+.overlay-inspector input[type=range]{width:100%;accent-color:#7caafa}
+.overlay-inspector output{float:right;font-size:10px;color:#afceff}
+.overlay-inspector .property-label{color:#b2d2ff}
+@media (max-width:1060px){
+ .studio{grid-template-columns:205px minmax(270px,1fr) 235px}
+ .timeline-subtitle{display:none}
+ .editor-tabs>span{padding:13px 12px}
+ .timeline-tools{gap:5px;overflow-x:auto;scrollbar-width:thin}
+}
+@media (max-width:740px){
+ .studio{grid-template-columns:1fr;grid-template-rows:180px 320px 260px minmax(280px,1fr);height:auto;overflow:visible}
+ .library,.center,.inspector{min-width:0}
+ .timeline{grid-column:1}
+ .editor-tabs .tab-tip{display:none}
+}
