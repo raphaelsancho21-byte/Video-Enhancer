@@ -178,3 +178,21 @@ A opção separada **Analisar batidas de outro arquivo** apenas analisa música 
 - Marcadores automáticos e visualização da forma de onda passam a seguir o deslocamento da música MP3 quando ela é arrastada na faixa A1. A reprodução sincroniza a faixa externa com a timeline mais frequentemente para reduzir o desvio percebido.
 
 Se as batidas automáticas ainda estiverem erradas para alguma música, prefira gravar marcadores manuais com M enquanto ouve; a precisão da análise automática varia com ritmo e gênero musical.
+
+
+## Editor multicamadas — layout desktop V2
+
+O editor principal (`http://127.0.0.1:8000/editor`) agora possui uma área de trabalho mais próxima da organização do CapCut Desktop: biblioteca à esquerda, monitor de vídeo ao centro, ajustes à direita e timeline maior na parte inferior. A navegação superior leva às seções **Mídia**, **Áudio** e **Efeitos** que já existem. Texto e Transições são identificados como recursos ainda não implementados.
+
+### Adicionar e editar camadas de vídeo
+
+1. Importe seu vídeo principal **V1**.
+2. Na Biblioteca, clique em **▧ Adicionar vídeo em camada** e selecione outro vídeo.
+3. Ele aparece numa faixa separada **V2**, acima do vídeo principal. É possível adicionar até quatro sobreposições, nas faixas **V2–V5**.
+4. Arraste o clipe da faixa para alterar seu início na timeline; selecione o clipe para usar os ajustes da lateral direita: início da mídia, fim da mídia, início na timeline, tamanho, opacidade, posição horizontal/vertical, ocultar e excluir.
+5. A prévia exibe as camadas reproduzíveis pelo navegador sobre o vídeo principal. A exportação FFmpeg compõe as camadas respeitando suas posições e opacidade, independentemente do suporte do navegador ao codec.
+6. A faixa musical **A1** continua independente das camadas de imagem. Seus botões de silenciar áudio V1 e A1, marcadores **M**, Motion Blur e preset TikTok HQ são preservados.
+
+**Escopo atual:** são camadas independentes de **vídeo** para picture-in-picture/sobreposição, uma mídia por faixa V2–V5. Os vídeos de sobreposição entram **sem o próprio áudio** (use A1 para música). A versão principal ainda não oferece texto, stickers ou transições multicamadas, nem vários clipes em uma mesma faixa de sobreposição. As mídias importadas ficam em `data/layers/`, e um projeto JSON salvo referencia os IDs: para abrir em outra instalação, também será preciso transportar as mídias. São aceitos MP4, MOV, MKV, WebM, AVI e M4V pelo FFmpeg, mas alguns codecs não aparecem na prévia do navegador.
+
+**Desempenho:** a quantidade máxima de camadas é quatro para evitar consumo excessivo; em máquinas de pouca RAM, use menos sobreposições e exporte trechos curtos ao conferir efeitos.
